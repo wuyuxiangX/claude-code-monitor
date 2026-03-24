@@ -1,19 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-STATE_DIR="$HOME/.claude/claude-code-monitor"
-STATE_FILE="$STATE_DIR/sessions.json"
+export STATE_DIR="$HOME/.claude/claude-code-monitor"
+export STATE_FILE="$STATE_DIR/sessions.json"
 LOCK_DIR="$STATE_DIR/.lock"
 
-# Read JSON from stdin
-INPUT=$(cat)
+# Read JSON from stdin into a temp file (avoids shell expansion issues)
+export INPUT_FILE=$(mktemp)
+cat > "$INPUT_FILE"
 
 # Ensure state directory exists
 mkdir -p "$STATE_DIR"
 
 # Acquire lock (mkdir is atomic on POSIX)
 acquire_lock() {
-  local max_wait=50  # 50 * 0.02 = 1 second max
+  local max_wait=50
   local i=0
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     i=$((i + 1))
@@ -28,30 +29,41 @@ acquire_lock() {
 
 release_lock() {
   rmdir "$LOCK_DIR" 2>/dev/null || true
+  rm -f "$INPUT_FILE" 2>/dev/null || true
 }
 
 trap release_lock EXIT
 
 acquire_lock
 
-# Read existing state or create new
-if [ -f "$STATE_FILE" ]; then
-  CURRENT=$(cat "$STATE_FILE")
-else
-  CURRENT='{"version":1,"sessions":{}}'
-fi
+# Python does everything: read input, read state, update, write state atomically
+/usr/bin/python3 << 'PYEOF'
+import json, os, time
 
-# Update using python3 (available on all macOS)
-UPDATED=$(echo "$INPUT" | /usr/bin/python3 -c "
-import sys, json, os, time
+input_file = os.environ.get('INPUT_FILE', '')
+state_dir = os.path.expanduser('~/.claude/claude-code-monitor')
+state_file = os.path.join(state_dir, 'sessions.json')
 
-hook_input = json.load(sys.stdin)
-data = json.loads('''$CURRENT''') if '''$CURRENT''' else {'version': 1, 'sessions': {}}
+# Read hook input
+try:
+    with open(input_file) as f:
+        hook_input = json.load(f)
+except:
+    raise SystemExit(0)
+
+# Read existing state
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            data = json.load(f)
+    except:
+        data = {'version': 1, 'sessions': {}}
+else:
+    data = {'version': 1, 'sessions': {}}
 
 sid = hook_input.get('session_id', '')
 if not sid:
-    print(json.dumps(data, indent=2))
-    sys.exit(0)
+    raise SystemExit(0)
 
 event = hook_input.get('hook_event_name', '')
 cwd = hook_input.get('cwd', '')
@@ -75,14 +87,12 @@ else:
     }
     new_state = state_map.get(event, '')
     if not new_state:
-        print(json.dumps(data, indent=2))
-        sys.exit(0)
+        raise SystemExit(0)
 
 now = int(time.time() * 1000)
-
 session = data.get('sessions', {}).get(sid, {})
 
-# Ensure base fields exist (handles events arriving before SessionStart)
+# Ensure base fields exist
 if 'session_id' not in session:
     session['session_id'] = sid
     session['cwd'] = cwd
@@ -108,6 +118,14 @@ if event == 'SessionStart':
 if event == 'SessionEnd':
     session['ended_at'] = now
 
+# Capture first prompt for label generation
+if event == 'UserPromptSubmit' and not session.get('first_prompt'):
+    prompt_text = hook_input.get('prompt', '')
+    if prompt_text:
+        session['first_prompt'] = prompt_text[:300]
+        if not session.get('label'):
+            session['label_pending'] = True
+
 session['state'] = new_state
 session['last_updated_at'] = now
 session['last_event'] = event
@@ -129,13 +147,72 @@ for k, v in list(data['sessions'].items()):
         v['ended_at'] = now
         v['last_event'] = 'StaleCleanup'
 
-print(json.dumps(data, indent=2))
-" 2>/dev/null) || {
-  release_lock
-  exit 0
-}
+# Atomic write directly from Python
+tmp = state_file + '.tmp.' + str(os.getpid())
+with open(tmp, 'w') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+os.rename(tmp, state_file)
+PYEOF
 
-# Atomic write
-TEMP_FILE="$STATE_DIR/sessions.tmp.$$"
-echo "$UPDATED" > "$TEMP_FILE"
-mv "$TEMP_FILE" "$STATE_FILE"
+# Async label generation
+if grep -q '"label_pending": true' "$STATE_FILE" 2>/dev/null; then
+  (
+    sleep 1
+    /usr/bin/python3 << 'LABELEOF'
+import json, os, subprocess, time
+
+state_file = os.path.expanduser('~/.claude/claude-code-monitor/sessions.json')
+lock_dir = os.path.expanduser('~/.claude/claude-code-monitor/.lock')
+
+with open(state_file) as f:
+    data = json.load(f)
+
+changed = False
+for sid, s in data.get('sessions', {}).items():
+    if not s.get('label_pending'):
+        continue
+    prompt = s.get('first_prompt', '')
+    if not prompt:
+        s.pop('label_pending', None)
+        changed = True
+        continue
+
+    try:
+        result = subprocess.run(
+            ['claude', '-p', '--model', 'haiku',
+             '用不超过10个字概括这个请求的核心目的，只输出概括不要任何其他内容：' + prompt[:200]],
+            capture_output=True, text=True, timeout=30
+        )
+        label = result.stdout.strip()
+        if label:
+            s['label'] = label[:30]
+    except:
+        pass
+
+    s.pop('label_pending', None)
+    changed = True
+
+if changed:
+    for i in range(50):
+        try:
+            os.mkdir(lock_dir)
+            break
+        except FileExistsError:
+            time.sleep(0.02)
+    else:
+        try: os.rmdir(lock_dir)
+        except: pass
+        try: os.mkdir(lock_dir)
+        except: pass
+
+    try:
+        tmp = state_file + '.tmp.' + str(os.getpid())
+        with open(tmp, 'w') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.rename(tmp, state_file)
+    finally:
+        try: os.rmdir(lock_dir)
+        except: pass
+LABELEOF
+  ) &
+fi

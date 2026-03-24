@@ -41,6 +41,8 @@ export function readHookSessions(): HookSession[] {
           last_event: session.last_event || "unknown",
           source: session.source || "",
           term_program: session.term_program,
+          label: session.label,
+          first_prompt: session.first_prompt,
         };
         // Mark stale sessions as ended
         if (
@@ -55,6 +57,8 @@ export function readHookSessions(): HookSession[] {
         }
         return normalized;
       })
+      // Filter out ghost sessions: never had any user interaction
+      .filter((s) => !!s.first_prompt || !["SessionStart", "StaleCleanup", "StaleDetected"].includes(s.last_event))
       .sort((a, b) => b.last_updated_at - a.last_updated_at);
   } catch {
     return [];

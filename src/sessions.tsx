@@ -173,6 +173,7 @@ function SessionItem({
   return (
     <List.Item
       title={title}
+      subtitle={session.label || ""}
       icon={{ source: config.icon, tintColor: config.color }}
       accessories={accessories}
       actions={

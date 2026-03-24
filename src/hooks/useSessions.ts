@@ -41,6 +41,7 @@ function mergeSessions(
       last_event: hook.last_event,
       transcript_path: hook.transcript_path,
       term_program: hook.term_program,
+      label: hook.label,
       // Merge JSONL metadata if found
       summary: jsonl?.summary,
       firstMessage: jsonl?.firstMessage,

@@ -13,6 +13,8 @@ export interface HookSession {
   last_event: string;
   source: string;
   term_program?: string;
+  label?: string;
+  first_prompt?: string;
 }
 
 export interface HookStateFile {
@@ -54,6 +56,7 @@ export interface Session {
   transcript_path?: string;
   term_program?: string;
   gitBranch?: string;
+  label?: string;
 }
 
 export interface SessionDetail extends SessionMetadata {
