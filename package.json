@@ -3,7 +3,7 @@
   "name": "claude-code-monitor",
   "title": "Claude Code Monitor",
   "description": "Real-time monitoring for Claude Code sessions with status tracking, usage statistics, and quick actions",
-  "icon": "extension-icon.png",
+  "icon": "icon.png",
   "author": "wuyuxiangX",
   "categories": ["Developer Tools", "Productivity"],
   "license": "MIT",
