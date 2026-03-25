@@ -12,6 +12,12 @@ interface JSONLEntry {
   message?: {
     role: string;
     content: string | Array<{ type: string; text?: string }>;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    };
   };
   costUSD?: number;
   model?: string;
@@ -327,6 +333,11 @@ async function parseFullSession(
     let totalCost = 0;
     let model: string | undefined;
     let firstMessage = "";
+    let gitBranch: string | undefined;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cacheReadTokens = 0;
+    let cacheCreationTokens = 0;
 
     const stream = fs.createReadStream(filePath, { encoding: "utf8" });
     const rl = readline.createInterface({ input: stream });
@@ -380,6 +391,14 @@ async function parseFullSession(
 
         if (entry.costUSD) totalCost += entry.costUSD;
         if (entry.model) model = entry.model;
+        if (entry.gitBranch) gitBranch = entry.gitBranch;
+        if (entry.message?.usage) {
+          const u = entry.message.usage;
+          if (u.input_tokens) inputTokens += u.input_tokens;
+          if (u.output_tokens) outputTokens += u.output_tokens;
+          if (u.cache_read_input_tokens) cacheReadTokens += u.cache_read_input_tokens;
+          if (u.cache_creation_input_tokens) cacheCreationTokens += u.cache_creation_input_tokens;
+        }
       } catch {
         // Skip
       }
@@ -400,6 +419,11 @@ async function parseFullSession(
           turnCount: messages.length,
           cost: totalCost,
           model,
+          gitBranch,
+          inputTokens: inputTokens || undefined,
+          outputTokens: outputTokens || undefined,
+          cacheReadTokens: cacheReadTokens || undefined,
+          cacheCreationTokens: cacheCreationTokens || undefined,
           messages,
         });
       } catch (err) {

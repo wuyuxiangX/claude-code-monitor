@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { useSessions } from "./hooks/useSessions";
 import { hooksInstalled, deleteHookSession } from "./lib/hook-state";
 import { getSessionDetail } from "./lib/session-parser";
-import { focusSession } from "./lib/terminal";
+import { focusSession, resumeSession } from "./lib/terminal";
 import { formatRelativeTime, formatDuration } from "./lib/time";
 import { formatCost } from "./lib/usage-stats";
 import {
@@ -204,7 +204,7 @@ function SessionItem({
                 title="View Details"
                 icon={Icon.Eye}
                 shortcut={{ modifiers: ["cmd"], key: "d" }}
-                target={<SessionDetailView sessionId={session.session_id} />}
+                target={<SessionDetailView sessionId={session.session_id} session={session} />}
               />
             )}
             {session.cwd && (
@@ -263,60 +263,106 @@ function SessionItem({
   );
 }
 
-function SessionDetailView({ sessionId }: { sessionId: string }) {
+function SessionDetailView({ sessionId, session: parentSession }: { sessionId: string; session: Session }) {
   const [isLoading, setIsLoading] = useState(true);
-  const [session, setSession] = useState<SessionDetailType | null>(null);
+  const [detail, setDetail] = useState<SessionDetailType | null>(null);
 
   useEffect(() => {
     async function load() {
-      const detail = await getSessionDetail(sessionId);
-      setSession(detail);
+      const d = await getSessionDetail(sessionId);
+      setDetail(d);
       setIsLoading(false);
     }
     load();
   }, [sessionId]);
 
-  if (!session && !isLoading) {
+  if (!detail && !isLoading) {
     return <Detail markdown="# Session Not Found" />;
   }
 
-  const markdown = session ? formatSessionMarkdown(session) : "Loading...";
+  const title = parentSession.label || parentSession.first_prompt?.replace(/\n+/g, " ").trim().slice(0, 50) || detail?.summary || "Session";
+  const stateConfig = STATE_CONFIG[parentSession.state] || DEFAULT_STATE_CONFIG;
+  const startedAt = parentSession.started_at || Date.now();
+  const endedAt = parentSession.ended_at ?? Date.now();
+  const duration = formatDuration(startedAt, endedAt);
+  const gitBranch = parentSession.gitBranch || detail?.gitBranch;
+  const firstPrompt = parentSession.first_prompt || detail?.firstMessage || "";
+  let markdown = `# ${title}\n\n`;
+  if (detail?.summary) markdown += `> ${detail.summary}\n\n`;
+  if (firstPrompt) markdown += `---\n\n## First Prompt\n\n${firstPrompt}\n`;
 
   return (
     <Detail
       isLoading={isLoading}
       markdown={markdown}
       metadata={
-        session ? (
+        detail ? (
           <Detail.Metadata>
-            <Detail.Metadata.Label title="Session ID" text={session.id || ""} />
+            <Detail.Metadata.Label title="Session ID" text={detail.id || ""} />
             <Detail.Metadata.Label
               title="Project"
-              text={session.projectName || ""}
+              text={detail.projectName || ""}
             />
             <Detail.Metadata.Label
               title="Path"
-              text={session.projectPath || ""}
+              text={detail.projectPath || ""}
             />
+            <Detail.Metadata.Separator />
+            <Detail.Metadata.TagList title="Status">
+              <Detail.Metadata.TagList.Item text={stateConfig.label} color={stateConfig.color} />
+            </Detail.Metadata.TagList>
+            {parentSession.term_program && (
+              <Detail.Metadata.Label
+                title="Terminal"
+                text={getAppLabel(parentSession.term_program)}
+              />
+            )}
+            {gitBranch && gitBranch !== "HEAD" && (
+              <Detail.Metadata.Label title="Git Branch" text={gitBranch} />
+            )}
             <Detail.Metadata.Separator />
             <Detail.Metadata.Label
               title="Turns"
-              text={`${session.turnCount || 0}`}
+              text={`${detail.turnCount || 0}`}
             />
-            {session.cost > 0 && (
+            {detail.cost > 0 && (
               <Detail.Metadata.Label
                 title="Cost"
-                text={formatCost(session.cost)}
+                text={formatCost(detail.cost)}
               />
             )}
-            {session.model && (
-              <Detail.Metadata.Label title="Model" text={session.model} />
+            {detail.model && (
+              <Detail.Metadata.Label title="Model" text={detail.model} />
             )}
+            {detail.inputTokens && (
+              <Detail.Metadata.Label
+                title="Input Tokens"
+                text={detail.inputTokens.toLocaleString()}
+              />
+            )}
+            {detail.outputTokens && (
+              <Detail.Metadata.Label
+                title="Output Tokens"
+                text={detail.outputTokens.toLocaleString()}
+              />
+            )}
+            {detail.cacheReadTokens && (
+              <Detail.Metadata.Label
+                title="Cache Read"
+                text={detail.cacheReadTokens.toLocaleString()}
+              />
+            )}
+            <Detail.Metadata.Separator />
+            <Detail.Metadata.Label title="Duration" text={duration} />
+            <Detail.Metadata.Label
+              title="Started"
+              text={new Date(startedAt).toLocaleString()}
+            />
             <Detail.Metadata.Label
               title="Last Modified"
               text={
-                session.lastModified
-                  ? session.lastModified.toLocaleString()
+                detail.lastModified
+                  ? detail.lastModified.toLocaleString()
                   : ""
               }
             />
@@ -324,41 +370,36 @@ function SessionDetailView({ sessionId }: { sessionId: string }) {
         ) : undefined
       }
       actions={
-        session ? (
-          <ActionPanel>
-            <Action.CopyToClipboard
-              title="Copy Session ID"
-              content={session.id || ""}
-            />
+        <ActionPanel>
+          <Action
+            title="Resume Session"
+            icon={Icon.ArrowRight}
+            onAction={async () => {
+              try {
+                const cwd = parentSession.cwd || detail?.projectPath || "";
+                await resumeSession(sessionId, cwd, parentSession.term_program);
+              } catch {
+                await showToast({
+                  style: Toast.Style.Failure,
+                  title: "Failed to resume session",
+                });
+              }
+            }}
+          />
+          <Action.CopyToClipboard
+            title="Copy Session ID"
+            content={sessionId}
+            shortcut={{ modifiers: ["cmd"], key: "c" }}
+          />
+          {(parentSession.cwd || detail?.projectPath) && (
             <Action.CopyToClipboard
               title="Copy Project Path"
-              content={session.projectPath || ""}
+              content={parentSession.cwd || detail?.projectPath || ""}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
             />
-          </ActionPanel>
-        ) : undefined
+          )}
+        </ActionPanel>
       }
     />
   );
-}
-
-function formatSessionMarkdown(session: SessionDetailType): string {
-  let md = `# ${session.firstMessage || session.summary || "Session"}\n\n`;
-  if (session.summary) md += `> ${session.summary}\n\n`;
-  md += `---\n\n## Conversation\n\n`;
-
-  const messages = session.messages || [];
-  for (const message of messages.slice(0, 20)) {
-    const role = message.type === "user" ? "**You**" : "**Claude**";
-    const content =
-      (message.content || "").length > 500
-        ? (message.content || "").slice(0, 500) + "..."
-        : message.content || "";
-    md += `${role}:\n${content}\n\n`;
-  }
-
-  if (messages.length > 20) {
-    md += `\n*...and ${messages.length - 20} more messages*\n`;
-  }
-
-  return md;
 }

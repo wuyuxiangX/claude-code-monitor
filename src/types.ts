@@ -41,6 +41,10 @@ export interface SessionMetadata {
   cost: number;
   model?: string;
   gitBranch?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
 }
 
 /** Merged session combining hook state + JSONL metadata */

@@ -31,6 +31,40 @@ interface Preferences {
  * Uses term_program saved by hook.sh during SessionStart.
  * Falls back to user preference or Terminal.app.
  */
+/**
+ * Resume a Claude Code session by opening a terminal and running claude --resume.
+ */
+export async function resumeSession(
+  sessionId: string,
+  cwd: string,
+  termProgram?: string,
+): Promise<void> {
+  const cmd = `claude --resume "${sessionId}"`;
+
+  if (termProgram === "Apple_Terminal") {
+    await execPromise(
+      `osascript -e 'tell application "Terminal" to do script "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
+    );
+    await execPromise(`open -a "Terminal"`);
+  } else if (termProgram === "iTerm.app") {
+    await execPromise(
+      `osascript -e 'tell application "iTerm" to create window with default profile command "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
+    );
+  } else if (termProgram === "WarpTerminal") {
+    await execPromise(
+      `osascript -e 'tell application "Warp" to activate' -e 'delay 0.3' -e 'tell application "System Events" to keystroke "t" using command down'`,
+    );
+    // Warp doesn't have great AppleScript support, open and let user paste
+    await execPromise(`open -a "Warp"`);
+  } else {
+    // For editors (zed, vscode, cursor) or unknown terminals, open default terminal
+    await execPromise(
+      `osascript -e 'tell application "Terminal" to do script "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
+    );
+    await execPromise(`open -a "Terminal"`);
+  }
+}
+
 export async function focusSession(session: Session): Promise<void> {
   const prefs = getPreferenceValues<Preferences>();
   const termProgram =
