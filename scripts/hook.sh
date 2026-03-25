@@ -119,12 +119,16 @@ if event == 'SessionEnd':
     session['ended_at'] = now
 
 # Capture first prompt for label generation
+LABEL_PREFIX = '用不超过10个字概括这个请求的核心目的'
 if event == 'UserPromptSubmit' and not session.get('first_prompt'):
     prompt_text = hook_input.get('prompt', '')
-    if prompt_text:
+    if prompt_text and not prompt_text.startswith(LABEL_PREFIX):
         session['first_prompt'] = prompt_text[:300]
         if not session.get('label'):
             session['label_pending'] = True
+    elif prompt_text.startswith(LABEL_PREFIX):
+        # Mark as internal session, skip tracking
+        session['_internal'] = True
 
 session['state'] = new_state
 session['last_updated_at'] = now

@@ -1,6 +1,7 @@
+import { AI } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
-import { useEffect, useCallback } from "react";
-import { readHookSessions } from "../lib/hook-state";
+import { useEffect, useCallback, useRef } from "react";
+import { readHookSessions, updateSessionLabel } from "../lib/hook-state";
 import { listAllSessions, encodeProjectPath } from "../lib/session-parser";
 import { Session, HookSession, SessionMetadata } from "../types";
 
@@ -42,6 +43,9 @@ function mergeSessions(
       transcript_path: hook.transcript_path,
       term_program: hook.term_program,
       label: hook.label,
+      first_prompt: hook.first_prompt,
+      is_worktree: hook.is_worktree,
+      worktree_name: hook.worktree_name,
       // Merge JSONL metadata if found
       summary: jsonl?.summary,
       firstMessage: jsonl?.firstMessage,
@@ -53,7 +57,17 @@ function mergeSessions(
   });
 }
 
+async function generateLabel(prompt: string): Promise<string> {
+  const result = await AI.ask(
+    `用不超过10个字概括这个请求的核心目的，只输出概括不要任何其他内容：${prompt.slice(0, 200)}`,
+    { model: AI.Model["Anthropic_Claude_4.5_Haiku"], creativity: "none" },
+  );
+  return result.trim().slice(0, 30);
+}
+
 export function useSessions(pollInterval: number = 3000) {
+  const pendingLabels = useRef(new Set<string>());
+
   const { data, isLoading, revalidate } = useCachedPromise(async () => {
     const hookSessions = readHookSessions();
     // Only load recent JSONL sessions for metadata enrichment
@@ -67,6 +81,32 @@ export function useSessions(pollInterval: number = 3000) {
 
     return { all: merged, active, waiting, idle, ended };
   }, []);
+
+  // Generate labels for sessions that have first_prompt but no label
+  useEffect(() => {
+    if (!data?.all) return;
+    const sessions = data.all.filter(
+      (s) => s.first_prompt && !s.label && !pendingLabels.current.has(s.session_id),
+    );
+    if (sessions.length === 0) return;
+
+    // Process up to 3 at a time to avoid overwhelming the AI API
+    const batch = sessions.slice(0, 3);
+    for (const session of batch) {
+      pendingLabels.current.add(session.session_id);
+      generateLabel(session.first_prompt!)
+        .then((label) => {
+          if (label) {
+            updateSessionLabel(session.session_id, label);
+            revalidate();
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          pendingLabels.current.delete(session.session_id);
+        });
+    }
+  }, [data?.all, revalidate]);
 
   const stableRevalidate = useCallback(() => {
     revalidate();

@@ -35,10 +35,10 @@ export default function MenuBarCommand() {
   const hasWaiting = waitingSessions.length > 0;
 
   const title = liveCount > 0 ? `${liveCount}` : undefined;
-  const icon = hasActive
-    ? { source: Icon.Terminal, tintColor: Color.Green }
-    : hasWaiting
-      ? { source: Icon.Terminal, tintColor: Color.Orange }
+  const icon = hasWaiting
+    ? { source: Icon.Terminal, tintColor: Color.Orange }
+    : hasActive
+      ? { source: Icon.Terminal, tintColor: Color.Green }
       : liveCount > 0
         ? { source: Icon.Terminal, tintColor: Color.Yellow }
         : { source: Icon.Terminal, tintColor: Color.SecondaryText };
@@ -50,18 +50,18 @@ export default function MenuBarCommand() {
       tooltip={`Claude Code: ${liveCount} session(s)`}
       isLoading={isLoading}
     >
-      {activeSessions.length > 0 && (
-        <MenuBarExtra.Section title={`Active (${activeSessions.length})`}>
-          {activeSessions.map((s) => (
-            <SessionMenuItem key={s.session_id} session={s} />
-          ))}
-        </MenuBarExtra.Section>
-      )}
       {waitingSessions.length > 0 && (
         <MenuBarExtra.Section
           title={`Waiting for Input (${waitingSessions.length})`}
         >
           {waitingSessions.map((s) => (
+            <SessionMenuItem key={s.session_id} session={s} />
+          ))}
+        </MenuBarExtra.Section>
+      )}
+      {activeSessions.length > 0 && (
+        <MenuBarExtra.Section title={`Active (${activeSessions.length})`}>
+          {activeSessions.map((s) => (
             <SessionMenuItem key={s.session_id} session={s} />
           ))}
         </MenuBarExtra.Section>

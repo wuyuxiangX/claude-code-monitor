@@ -101,19 +101,19 @@ export default function SessionsCommand() {
           icon={Icon.Terminal}
         />
       )}
-      {activeSessions.length > 0 && (
-        <List.Section title="Active" subtitle={`${activeSessions.length}`}>
-          {activeSessions.map((s) => (
-            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
-          ))}
-        </List.Section>
-      )}
       {waitingSessions.length > 0 && (
         <List.Section
           title="Waiting for Input"
           subtitle={`${waitingSessions.length}`}
         >
           {waitingSessions.map((s) => (
+            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
+          ))}
+        </List.Section>
+      )}
+      {activeSessions.length > 0 && (
+        <List.Section title="Active" subtitle={`${activeSessions.length}`}>
+          {activeSessions.map((s) => (
             <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
           ))}
         </List.Section>
@@ -153,6 +153,12 @@ function SessionItem({
     { tag: { value: config.label, color: config.color } },
   ];
 
+  if (session.is_worktree) {
+    accessories.push({
+      tag: { value: "Worktree", color: Color.Purple },
+    });
+  }
+
   if (session.term_program) {
     accessories.push({
       tag: { value: getAppLabel(session.term_program), color: Color.Blue },
@@ -173,7 +179,7 @@ function SessionItem({
   return (
     <List.Item
       title={title}
-      subtitle={session.label || ""}
+      subtitle={session.label || (session.first_prompt ? (session.first_prompt.replace(/\n+/g, " ").trim().length > 50 ? session.first_prompt.replace(/\n+/g, " ").trim().slice(0, 50) + "…" : session.first_prompt.replace(/\n+/g, " ").trim()) : "")}
       icon={{ source: config.icon, tintColor: config.color }}
       accessories={accessories}
       actions={

@@ -15,11 +15,17 @@ export interface HookSession {
   term_program?: string;
   label?: string;
   first_prompt?: string;
+  is_worktree?: boolean;
+  worktree_name?: string;
+}
+
+export interface HookStateRaw extends HookSession {
+  _internal?: boolean;
 }
 
 export interface HookStateFile {
   version: number;
-  sessions: Record<string, HookSession>;
+  sessions: Record<string, HookStateRaw>;
 }
 
 /** JSONL session metadata parsed from transcript files */
@@ -57,6 +63,9 @@ export interface Session {
   term_program?: string;
   gitBranch?: string;
   label?: string;
+  first_prompt?: string;
+  is_worktree?: boolean;
+  worktree_name?: string;
 }
 
 export interface SessionDetail extends SessionMetadata {

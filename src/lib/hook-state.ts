@@ -1,7 +1,10 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { HookSession, HookStateFile, SessionState } from "../types";
+
+const WORKTREE_PATTERN = /\/\.claude\/worktrees\/([^/]+)$/;
+const LABEL_PROMPT_PREFIX = "用不超过10个字概括这个请求的核心目的";
 
 const STATE_DIR = join(homedir(), ".claude", "claude-code-monitor");
 const STATE_FILE = join(STATE_DIR, "sessions.json");
@@ -24,15 +27,27 @@ export function readHookSessions(): HookSession[] {
     const now = Date.now();
 
     return Object.entries(data.sessions)
+      .filter(([, session]) => {
+        // Skip internal sessions (label generation via claude -p)
+        if (session._internal) return false;
+        if (session.first_prompt?.startsWith(LABEL_PROMPT_PREFIX)) return false;
+        return true;
+      })
       .map(([key, session]) => {
-        // Ensure required fields exist (handles incomplete entries)
+        const cwd = session.cwd || "";
+        const worktreeMatch = cwd.match(WORKTREE_PATTERN);
+        const isWorktree = !!worktreeMatch;
+        // For worktrees, extract real project name from parent path
+        const projectName = isWorktree
+          ? basename(cwd.replace(/\/\.claude\/worktrees\/[^/]+$/, ""))
+          : session.project_name ||
+            session.session_id?.slice(0, 8) ||
+            key.slice(0, 8);
+
         const normalized: HookSession = {
           session_id: session.session_id || key,
-          cwd: session.cwd || "",
-          project_name:
-            session.project_name ||
-            session.session_id?.slice(0, 8) ||
-            key.slice(0, 8),
+          cwd,
+          project_name: projectName,
           transcript_path: session.transcript_path || "",
           state: session.state || "ended",
           started_at: session.started_at || session.last_updated_at || now,
@@ -43,6 +58,8 @@ export function readHookSessions(): HookSession[] {
           term_program: session.term_program,
           label: session.label,
           first_prompt: session.first_prompt,
+          is_worktree: isWorktree || undefined,
+          worktree_name: worktreeMatch ? worktreeMatch[1] : undefined,
         };
         // Mark stale sessions as ended
         if (
@@ -77,6 +94,23 @@ export function deleteHookSession(sessionId: string): boolean {
     const data: HookStateFile = JSON.parse(raw);
     if (!(sessionId in data.sessions)) return false;
     delete data.sessions[sessionId];
+    writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function updateSessionLabel(
+  sessionId: string,
+  label: string,
+): boolean {
+  if (!existsSync(STATE_FILE)) return false;
+  try {
+    const raw = readFileSync(STATE_FILE, "utf-8");
+    const data: HookStateFile = JSON.parse(raw);
+    if (!(sessionId in data.sessions)) return false;
+    data.sessions[sessionId].label = label;
     writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
     return true;
   } catch {
