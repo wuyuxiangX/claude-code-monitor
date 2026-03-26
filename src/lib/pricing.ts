@@ -46,10 +46,13 @@ export interface TokenUsage {
 
 export function calculateEntryCost(model: string, usage: TokenUsage): number {
   const p = resolveModelPricing(model);
-  const input = (usage.input_tokens || 0) / 1_000_000 * p.inputPerMTok;
-  const output = (usage.output_tokens || 0) / 1_000_000 * p.outputPerMTok;
-  const cacheRead = (usage.cache_read_input_tokens || 0) / 1_000_000 * p.cacheReadPerMTok;
-  const cacheWrite = (usage.cache_creation_input_tokens || 0) / 1_000_000 * p.cacheWritePerMTok;
+  const input = ((usage.input_tokens || 0) / 1_000_000) * p.inputPerMTok;
+  const output = ((usage.output_tokens || 0) / 1_000_000) * p.outputPerMTok;
+  const cacheRead =
+    ((usage.cache_read_input_tokens || 0) / 1_000_000) * p.cacheReadPerMTok;
+  const cacheWrite =
+    ((usage.cache_creation_input_tokens || 0) / 1_000_000) *
+    p.cacheWritePerMTok;
   return input + output + cacheRead + cacheWrite;
 }
 

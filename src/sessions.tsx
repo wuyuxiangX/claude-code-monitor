@@ -17,11 +17,13 @@ import { getSessionDetail } from "./lib/session-parser";
 import { focusSession, resumeSession } from "./lib/terminal";
 import { formatRelativeTime, formatDuration } from "./lib/time";
 import { formatCost } from "./lib/usage-stats";
-import { STATE_CONFIG, DEFAULT_STATE_CONFIG, APP_LABELS, getSessionTitle } from "./lib/constants";
 import {
-  Session,
-  SessionDetail as SessionDetailType,
-} from "./types";
+  STATE_CONFIG,
+  DEFAULT_STATE_CONFIG,
+  APP_LABELS,
+  getSessionTitle,
+} from "./lib/constants";
+import { Session, SessionDetail as SessionDetailType } from "./types";
 
 function getAppLabel(termProgram: string): string {
   return APP_LABELS[termProgram] || termProgram;
@@ -76,7 +78,11 @@ export default function SessionsCommand() {
             subtitle={`${section.sessions.length}`}
           >
             {section.sessions.map((s) => (
-              <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
+              <SessionItem
+                key={s.session_id}
+                session={s}
+                onDelete={revalidate}
+              />
             ))}
           </List.Section>
         ))}
@@ -122,7 +128,9 @@ function SessionItem({
 
   const title = getSessionTitle(session);
   const cleanPrompt = session.first_prompt?.replace(/\n+/g, " ").trim() ?? "";
-  const subtitle = session.label || (cleanPrompt.length > 50 ? cleanPrompt.slice(0, 50) + "..." : cleanPrompt);
+  const subtitle =
+    session.label ||
+    (cleanPrompt.length > 50 ? cleanPrompt.slice(0, 50) + "..." : cleanPrompt);
 
   return (
     <List.Item
@@ -152,7 +160,12 @@ function SessionItem({
                 title="View Details"
                 icon={Icon.Eye}
                 shortcut={{ modifiers: ["cmd"], key: "d" }}
-                target={<SessionDetailView sessionId={session.session_id} session={session} />}
+                target={
+                  <SessionDetailView
+                    sessionId={session.session_id}
+                    session={session}
+                  />
+                }
               />
             )}
             {session.cwd && (
@@ -211,7 +224,13 @@ function SessionItem({
   );
 }
 
-function SessionDetailView({ sessionId, session: parentSession }: { sessionId: string; session: Session }) {
+function SessionDetailView({
+  sessionId,
+  session: parentSession,
+}: {
+  sessionId: string;
+  session: Session;
+}) {
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<SessionDetailType | null>(null);
 
@@ -233,7 +252,11 @@ function SessionDetailView({ sessionId, session: parentSession }: { sessionId: s
     return <Detail markdown="# Session Not Found" />;
   }
 
-  const title = parentSession.label || parentSession.first_prompt?.replace(/\n+/g, " ").trim().slice(0, 50) || detail?.summary || "Session";
+  const title =
+    parentSession.label ||
+    parentSession.first_prompt?.replace(/\n+/g, " ").trim().slice(0, 50) ||
+    detail?.summary ||
+    "Session";
   const stateConfig = STATE_CONFIG[parentSession.state] || DEFAULT_STATE_CONFIG;
   const startedAt = parentSession.started_at || Date.now();
   const endedAt = parentSession.ended_at ?? Date.now();
@@ -262,7 +285,10 @@ function SessionDetailView({ sessionId, session: parentSession }: { sessionId: s
             />
             <Detail.Metadata.Separator />
             <Detail.Metadata.TagList title="Status">
-              <Detail.Metadata.TagList.Item text={stateConfig.label} color={stateConfig.color} />
+              <Detail.Metadata.TagList.Item
+                text={stateConfig.label}
+                color={stateConfig.color}
+              />
             </Detail.Metadata.TagList>
             {parentSession.term_program && (
               <Detail.Metadata.Label
@@ -314,9 +340,7 @@ function SessionDetailView({ sessionId, session: parentSession }: { sessionId: s
             <Detail.Metadata.Label
               title="Last Modified"
               text={
-                detail.lastModified
-                  ? detail.lastModified.toLocaleString()
-                  : ""
+                detail.lastModified ? detail.lastModified.toLocaleString() : ""
               }
             />
           </Detail.Metadata>

@@ -9,16 +9,13 @@ export function usePlugins() {
     data: localData,
     isLoading: localLoading,
     revalidate: revalidateLocal,
-  } = useCachedPromise(
-    async () => {
-      const [plugins, skills] = await Promise.all([
-        loadAllPlugins(),
-        loadAllSkills(),
-      ]);
-      return { plugins, skills };
-    },
-    [],
-  );
+  } = useCachedPromise(async () => {
+    const [plugins, skills] = await Promise.all([
+      loadAllPlugins(),
+      loadAllSkills(),
+    ]);
+    return { plugins, skills };
+  }, []);
 
   // Load MCP servers separately (slow: spawns health check processes)
   const {
@@ -41,6 +38,9 @@ export function usePlugins() {
     isMcpLoading: mcpLoading,
     revalidateLocal,
     revalidateMcp,
-    revalidate: () => { revalidateLocal(); revalidateMcp(); },
+    revalidate: () => {
+      revalidateLocal();
+      revalidateMcp();
+    },
   };
 }

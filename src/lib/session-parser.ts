@@ -196,7 +196,9 @@ const USAGE_CACHE_FILE = path.join(
 let usageCache: Record<string, SessionParserCacheEntry> | null = null;
 let usageCacheDirty = false;
 
-async function loadUsageCache(): Promise<Record<string, SessionParserCacheEntry>> {
+async function loadUsageCache(): Promise<
+  Record<string, SessionParserCacheEntry>
+> {
   if (usageCache) return usageCache;
   try {
     const data = await fs.promises.readFile(USAGE_CACHE_FILE, "utf8");
@@ -537,8 +539,10 @@ async function parseFullSession(
           const u = entry.message.usage;
           if (u.input_tokens) inputTokens += u.input_tokens;
           if (u.output_tokens) outputTokens += u.output_tokens;
-          if (u.cache_read_input_tokens) cacheReadTokens += u.cache_read_input_tokens;
-          if (u.cache_creation_input_tokens) cacheCreationTokens += u.cache_creation_input_tokens;
+          if (u.cache_read_input_tokens)
+            cacheReadTokens += u.cache_read_input_tokens;
+          if (u.cache_creation_input_tokens)
+            cacheCreationTokens += u.cache_creation_input_tokens;
           if (entry.message.model) {
             totalCost += calculateEntryCost(entry.message.model, u);
           }

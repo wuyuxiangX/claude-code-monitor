@@ -178,7 +178,12 @@ export interface SkillInfo {
 
 // ===== MCP Server Types =====
 
-export type McpStatus = "Connected" | "Needs Auth" | "Unreachable" | "Unknown" | (string & {});
+export type McpStatus =
+  | "Connected"
+  | "Needs Auth"
+  | "Unreachable"
+  | "Unknown"
+  | (string & {});
 export type McpCategory = "user" | "cloud" | "builtin";
 
 export interface McpServerInfo {

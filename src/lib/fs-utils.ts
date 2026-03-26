@@ -13,7 +13,9 @@ export function readJsonFile<T>(filePath: string): T | null {
 
 const HOME = os.homedir();
 
-export function buildClaudeEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {
+export function buildClaudeEnv(
+  extraEnv?: Record<string, string>,
+): NodeJS.ProcessEnv {
   const extraPaths = [
     path.join(HOME, ".local", "share", "fnm", "aliases", "default", "bin"),
     path.join(HOME, ".local", "bin"),

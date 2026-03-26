@@ -3,7 +3,12 @@ import path from "node:path";
 import os from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { UsageStats, DailyStats, SessionMetadata, ProjectStats, UsageCacheEntry } from "../types";
+import {
+  UsageStats,
+  DailyStats,
+  SessionMetadata,
+  ProjectStats,
+} from "../types";
 import { formatTokens, normalizeModelName } from "./pricing";
 
 const execPromise = promisify(exec);
@@ -108,7 +113,12 @@ function calculateStats(sessions: SessionMetadata[]): UsageStats {
 
     const pn = session.projectName;
     if (!sessionsByProject[pn]) {
-      sessionsByProject[pn] = { count: 0, cost: 0, inputTokens: 0, outputTokens: 0 };
+      sessionsByProject[pn] = {
+        count: 0,
+        cost: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
       projectCostCents[pn] = 0;
     }
     sessionsByProject[pn].count++;
@@ -116,8 +126,11 @@ function calculateStats(sessions: SessionMetadata[]): UsageStats {
     sessionsByProject[pn].inputTokens += session.inputTokens || 0;
     sessionsByProject[pn].outputTokens += session.outputTokens || 0;
 
-    const modelKey = session.model ? normalizeModelName(session.model) : "Unknown";
-    if (!modelBreakdown[modelKey]) modelBreakdown[modelKey] = { sessions: 0, cost: 0 };
+    const modelKey = session.model
+      ? normalizeModelName(session.model)
+      : "Unknown";
+    if (!modelBreakdown[modelKey])
+      modelBreakdown[modelKey] = { sessions: 0, cost: 0 };
     modelBreakdown[modelKey].sessions++;
     modelBreakdown[modelKey].cost += session.cost || 0;
   }

@@ -40,6 +40,9 @@ export const APP_LABELS: Record<string, string> = {
 };
 
 // 会话标题获取辅助函数
-export function getSessionTitle(session: { project_name?: string; session_id: string }): string {
+export function getSessionTitle(session: {
+  project_name?: string;
+  session_id: string;
+}): string {
   return session.project_name || session.session_id.slice(0, 12) || "Unknown";
 }

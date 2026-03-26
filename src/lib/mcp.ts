@@ -11,7 +11,12 @@ const execFileAsync = promisify(execFile);
 const HOME = os.homedir();
 const CLAUDE_JSON_PATH = path.join(HOME, ".claude.json");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
-const INSTALLED_PLUGINS_PATH = path.join(HOME, ".claude", "plugins", "installed_plugins.json");
+const INSTALLED_PLUGINS_PATH = path.join(
+  HOME,
+  ".claude",
+  "plugins",
+  "installed_plugins.json",
+);
 
 function getShellProxy(): Record<string, string> {
   // Raycast (GUI app) doesn't source ~/.zshrc, so proxy env vars are missing.
@@ -22,12 +27,16 @@ function getShellProxy(): Record<string, string> {
     for (const file of rcFiles) {
       const content = fs.readFileSync(path.join(HOME, file), "utf-8");
       const vars: Record<string, string> = {};
-      for (const m of content.matchAll(/(?:export\s+)?((https?_proxy|all_proxy|no_proxy))=(\S+)/gi)) {
+      for (const m of content.matchAll(
+        /(?:export\s+)?((https?_proxy|all_proxy|no_proxy))=(\S+)/gi,
+      )) {
         vars[m[1]] = m[3];
       }
       if (Object.keys(vars).length > 0) return vars;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return {};
 }
 
@@ -64,7 +73,8 @@ function normalizeStatus(raw: string): { status: string; detail?: string } {
   const cleaned = raw.replace(/^[✓✗!]\s*/, "").trim();
   if (raw.includes("Connected")) return { status: "Connected" };
   if (raw.includes("authentication")) return { status: "Needs Auth" };
-  if (raw.includes("Failed")) return { status: "Unreachable", detail: cleaned || undefined };
+  if (raw.includes("Failed"))
+    return { status: "Unreachable", detail: cleaned || undefined };
   return { status: cleaned || "Unknown", detail: cleaned || undefined };
 }
 
@@ -91,7 +101,9 @@ export async function loadAllMcpServers(): Promise<McpServerInfo[]> {
     seen.add(name);
     const args = config.args?.join(" ") || "";
     const envEntries = config.env
-      ? Object.entries(config.env).map(([k, v]) => `${k}=${v}`).join(", ")
+      ? Object.entries(config.env)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(", ")
       : undefined;
 
     const { status, detail } = normalizeStatus(statusMap.get(name) || "");
@@ -140,12 +152,21 @@ export async function loadAllMcpServers(): Promise<McpServerInfo[]> {
 function addFallbackServers(servers: McpServerInfo[], seen: Set<string>) {
   // Cloud servers
   const clouds = [
-    { name: "claude.ai Google Calendar", url: "https://gcal.mcp.claude.com/mcp" },
+    {
+      name: "claude.ai Google Calendar",
+      url: "https://gcal.mcp.claude.com/mcp",
+    },
     { name: "claude.ai Gmail", url: "https://gmail.mcp.claude.com/mcp" },
     { name: "claude.ai Notion", url: "https://mcp.notion.com/mcp" },
   ];
   for (const c of clouds) {
-    servers.push({ name: c.name, status: "Unknown", type: "http", category: "cloud", url: c.url });
+    servers.push({
+      name: c.name,
+      status: "Unknown",
+      type: "http",
+      category: "cloud",
+      url: c.url,
+    });
   }
 
   // Built-in from enabled plugins
@@ -164,7 +185,8 @@ function addFallbackServers(servers: McpServerInfo[], seen: Set<string>) {
     const mcpData = readJsonFile<Record<string, unknown>>(mcpPath);
     if (!mcpData) continue;
 
-    const mcpServers = (mcpData.mcpServers as Record<string, McpConfigEntry>) ?? mcpData;
+    const mcpServers =
+      (mcpData.mcpServers as Record<string, McpConfigEntry>) ?? mcpData;
     const pluginName = key.split("@")[0];
 
     for (const [sName, config] of Object.entries(mcpServers)) {

@@ -40,21 +40,33 @@ export function SkillsView({
       {userSkills.length > 0 && (
         <List.Section title="User Skills" subtitle={`${userSkills.length}`}>
           {userSkills.map((s) => (
-            <SkillListItem key={`user-${s.dirName}`} skill={s} revalidate={revalidate} />
+            <SkillListItem
+              key={`user-${s.dirName}`}
+              skill={s}
+              revalidate={revalidate}
+            />
           ))}
         </List.Section>
       )}
       {commandSkills.length > 0 && (
         <List.Section title="Commands" subtitle={`${commandSkills.length}`}>
           {commandSkills.map((s) => (
-            <SkillListItem key={`cmd-${s.dirName}`} skill={s} revalidate={revalidate} />
+            <SkillListItem
+              key={`cmd-${s.dirName}`}
+              skill={s}
+              revalidate={revalidate}
+            />
           ))}
         </List.Section>
       )}
       {pluginSkills.length > 0 && (
         <List.Section title="Plugin Skills" subtitle={`${pluginSkills.length}`}>
           {pluginSkills.map((s) => (
-            <SkillListItem key={`plugin-${s.dirName}`} skill={s} revalidate={revalidate} />
+            <SkillListItem
+              key={`plugin-${s.dirName}`}
+              skill={s}
+              revalidate={revalidate}
+            />
           ))}
         </List.Section>
       )}
@@ -146,7 +158,8 @@ function SkillDetailView({
 }) {
   let markdown = `# ${skill.name}\n\n`;
   if (skill.description) markdown += `${skill.description}\n\n`;
-  if (skill.userInvokable) markdown += `Use with \`/${skill.name}\` in Claude Code.\n\n`;
+  if (skill.userInvokable)
+    markdown += `Use with \`/${skill.name}\` in Claude Code.\n\n`;
 
   return (
     <Detail

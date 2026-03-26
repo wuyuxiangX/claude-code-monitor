@@ -219,7 +219,9 @@ async function main() {
   }
 
   // Output JSON summary to stdout
-  process.stdout.write(JSON.stringify({ ok: true, count: Object.keys(cache).length }));
+  process.stdout.write(
+    JSON.stringify({ ok: true, count: Object.keys(cache).length }),
+  );
 }
 
 main().catch((err) => {

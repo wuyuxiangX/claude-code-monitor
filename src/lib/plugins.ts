@@ -17,10 +17,18 @@ import { readJsonFile, buildClaudeEnv } from "./fs-utils";
 const execFileAsync = promisify(execFile);
 
 const CLAUDE_DIR = path.join(os.homedir(), ".claude");
-const INSTALLED_PLUGINS_PATH = path.join(CLAUDE_DIR, "plugins", "installed_plugins.json");
+const INSTALLED_PLUGINS_PATH = path.join(
+  CLAUDE_DIR,
+  "plugins",
+  "installed_plugins.json",
+);
 const SETTINGS_PATH = path.join(CLAUDE_DIR, "settings.json");
 const BLOCKLIST_PATH = path.join(CLAUDE_DIR, "plugins", "blocklist.json");
-const KNOWN_MARKETPLACES_PATH = path.join(CLAUDE_DIR, "plugins", "known_marketplaces.json");
+const KNOWN_MARKETPLACES_PATH = path.join(
+  CLAUDE_DIR,
+  "plugins",
+  "known_marketplaces.json",
+);
 
 function readInstalledPlugins(): Record<string, PluginInstallation[]> {
   const data = readJsonFile<InstalledPluginsFile>(INSTALLED_PLUGINS_PATH);
@@ -38,11 +46,17 @@ function readBlocklist(): BlocklistEntry[] {
 }
 
 function readKnownMarketplaces(): Record<string, MarketplaceInfo> {
-  return readJsonFile<Record<string, MarketplaceInfo>>(KNOWN_MARKETPLACES_PATH) ?? {};
+  return (
+    readJsonFile<Record<string, MarketplaceInfo>>(KNOWN_MARKETPLACES_PATH) ?? {}
+  );
 }
 
 function readPluginMetadata(installPath: string): PluginMetadata | null {
-  const pluginJsonPath = path.join(installPath, ".claude-plugin", "plugin.json");
+  const pluginJsonPath = path.join(
+    installPath,
+    ".claude-plugin",
+    "plugin.json",
+  );
   return readJsonFile<PluginMetadata>(pluginJsonPath);
 }
 
@@ -84,7 +98,8 @@ function scanPluginContents(installPath: string): PluginContents | null {
     if (fs.existsSync(mcpJsonPath)) {
       const mcpData = readJsonFile<Record<string, unknown>>(mcpJsonPath);
       if (mcpData) {
-        const servers = (mcpData.mcpServers as Record<string, unknown>) ?? mcpData;
+        const servers =
+          (mcpData.mcpServers as Record<string, unknown>) ?? mcpData;
         for (const key of Object.keys(servers)) {
           if (key !== "mcpServers") mcpServers.push(key);
         }

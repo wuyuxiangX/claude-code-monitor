@@ -9,7 +9,11 @@ import { useSessions } from "./hooks/useSessions";
 import { focusSession } from "./lib/terminal";
 import { formatRelativeTime, formatDuration } from "./lib/time";
 import { formatCost } from "./lib/usage-stats";
-import { STATE_CONFIG, DEFAULT_STATE_CONFIG, getSessionTitle } from "./lib/constants";
+import {
+  STATE_CONFIG,
+  DEFAULT_STATE_CONFIG,
+  getSessionTitle,
+} from "./lib/constants";
 import { Session } from "./types";
 
 export default function MenuBarCommand() {

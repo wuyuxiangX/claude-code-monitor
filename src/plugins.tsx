@@ -16,8 +16,14 @@ const SEARCH_PLACEHOLDERS: Record<ViewMode, string> = {
 export default function PluginManagerCommand() {
   const [viewMode, setViewMode] = useState<ViewMode>("plugins");
   const {
-    enabledPlugins, disabledPlugins, skills, mcpServers,
-    isLoading, isMcpLoading, revalidateLocal, revalidateMcp,
+    enabledPlugins,
+    disabledPlugins,
+    skills,
+    mcpServers,
+    isLoading,
+    isMcpLoading,
+    revalidateLocal,
+    revalidateMcp,
   } = usePlugins();
 
   return (
@@ -30,9 +36,17 @@ export default function PluginManagerCommand() {
           value={viewMode}
           onChange={(v) => setViewMode(v as ViewMode)}
         >
-          <List.Dropdown.Item title="Plugins" value="plugins" icon={Icon.Plug} />
+          <List.Dropdown.Item
+            title="Plugins"
+            value="plugins"
+            icon={Icon.Plug}
+          />
           <List.Dropdown.Item title="Skills" value="skills" icon={Icon.Book} />
-          <List.Dropdown.Item title="MCP Servers" value="mcp" icon={Icon.Globe} />
+          <List.Dropdown.Item
+            title="MCP Servers"
+            value="mcp"
+            icon={Icon.Globe}
+          />
         </List.Dropdown>
       }
     >

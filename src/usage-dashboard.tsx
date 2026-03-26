@@ -11,8 +11,8 @@ import { formatTokens } from "./lib/pricing";
 import { UsageStats, DailyStats } from "./types";
 
 export default function UsageDashboardCommand() {
-  const { data, isLoading, revalidate } = useCachedPromise(
-    () => getAllStats(7),
+  const { data, isLoading, revalidate } = useCachedPromise(() =>
+    getAllStats(7),
   );
 
   const markdown = data
@@ -113,7 +113,6 @@ function buildDashboardMarkdown(data: {
   md += "## Project Breakdown (This Week)\n\n";
   md += generateProjectTable(data.week.sessionsByProject);
   md += "\n";
-
 
   return md;
 }

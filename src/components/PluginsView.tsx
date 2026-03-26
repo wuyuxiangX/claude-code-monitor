@@ -233,10 +233,7 @@ function PluginDetailView({
               color={plugin.enabled ? Color.Green : Color.SecondaryText}
             />
             {plugin.blocklist && (
-              <Detail.Metadata.TagList.Item
-                text="Blocked"
-                color={Color.Red}
-              />
+              <Detail.Metadata.TagList.Item text="Blocked" color={Color.Red} />
             )}
             {!plugin.installPathExists && (
               <Detail.Metadata.TagList.Item

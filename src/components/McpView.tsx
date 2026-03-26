@@ -58,7 +58,10 @@ export function McpView({
         </List.Section>
       )}
       {builtinServers.length > 0 && (
-        <List.Section title="Built-in MCPs" subtitle={`${builtinServers.length}`}>
+        <List.Section
+          title="Built-in MCPs"
+          subtitle={`${builtinServers.length}`}
+        >
           {builtinServers.map((s) => (
             <McpListItem key={s.name} server={s} revalidate={revalidate} />
           ))}
@@ -107,10 +110,14 @@ function McpListItem({
       value: server.status || "Unknown",
       color: STATUS_COLOR[server.status] ?? Color.SecondaryText,
     },
-    tooltip: isUnreachable ? "Health check unreachable — may still work in active sessions" : undefined,
+    tooltip: isUnreachable
+      ? "Health check unreachable — may still work in active sessions"
+      : undefined,
   });
 
-  const subtitle = server.url || (server.command ? `${server.command} ${server.args || ""}` : "");
+  const subtitle =
+    server.url ||
+    (server.command ? `${server.command} ${server.args || ""}` : "");
 
   return (
     <List.Item
@@ -180,7 +187,8 @@ function McpDetailView({
 }) {
   let markdown = `# ${server.name}\n\n`;
   if (server.url) markdown += `**URL:** \`${server.url}\`\n\n`;
-  if (server.command) markdown += `**Command:** \`${server.command} ${server.args || ""}\`\n\n`;
+  if (server.command)
+    markdown += `**Command:** \`${server.command} ${server.args || ""}\`\n\n`;
   if (server.status === "Unreachable" && server.statusDetail) {
     markdown += `> **Health Check:** ${server.statusDetail}\n>\n> Unreachable during health check — this does not mean the server cannot work in active Claude Code sessions. npx-based servers often fail health checks due to startup time.\n\n`;
   }
@@ -195,9 +203,12 @@ function McpDetailView({
             <Detail.Metadata.TagList.Item
               text={server.status || "Unknown"}
               color={
-                server.status === "Connected" ? Color.Green
-                  : server.status === "Needs Auth" ? Color.Orange
-                    : server.status === "Unreachable" ? Color.Yellow
+                server.status === "Connected"
+                  ? Color.Green
+                  : server.status === "Needs Auth"
+                    ? Color.Orange
+                    : server.status === "Unreachable"
+                      ? Color.Yellow
                       : Color.SecondaryText
               }
             />

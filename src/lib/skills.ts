@@ -8,7 +8,12 @@ const HOME = os.homedir();
 const SKILLS_DIR = path.join(HOME, ".claude", "skills");
 const COMMANDS_DIR = path.join(HOME, ".claude", "commands");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
-const INSTALLED_PLUGINS_PATH = path.join(HOME, ".claude", "plugins", "installed_plugins.json");
+const INSTALLED_PLUGINS_PATH = path.join(
+  HOME,
+  ".claude",
+  "plugins",
+  "installed_plugins.json",
+);
 
 function parseSkillFrontmatter(content: string): {
   name?: string;
@@ -35,7 +40,8 @@ function parseSkillFrontmatter(content: string): {
   return {
     name: result.name as string | undefined,
     description: result.description as string | undefined,
-    userInvokable: result["user-invokable"] === true || result["user-invocable"] === true,
+    userInvokable:
+      result["user-invokable"] === true || result["user-invocable"] === true,
   };
 }
 
@@ -77,7 +83,9 @@ function loadUserSkills(): SkillInfo[] {
             break;
           }
         }
-      } catch { /* not a directory */ }
+      } catch {
+        /* not a directory */
+      }
     }
 
     if (!skillMdPath) continue;
@@ -113,7 +121,11 @@ function loadCommandSkills(): SkillInfo[] {
   for (const group of fs.readdirSync(COMMANDS_DIR)) {
     const groupPath = path.join(COMMANDS_DIR, group);
     let stat: fs.Stats;
-    try { stat = fs.statSync(groupPath); } catch { continue; }
+    try {
+      stat = fs.statSync(groupPath);
+    } catch {
+      continue;
+    }
     if (!stat.isDirectory()) continue;
 
     for (const file of fs.readdirSync(groupPath)) {
@@ -145,7 +157,8 @@ function loadCommandSkills(): SkillInfo[] {
 
 function loadPluginSkills(): SkillInfo[] {
   const settings = readJsonFile<Record<string, unknown>>(SETTINGS_PATH);
-  const enabledPlugins = (settings?.enabledPlugins as Record<string, boolean>) ?? {};
+  const enabledPlugins =
+    (settings?.enabledPlugins as Record<string, boolean>) ?? {};
   const installed = readJsonFile<InstalledPluginsFile>(INSTALLED_PLUGINS_PATH);
   if (!installed) return [];
 
