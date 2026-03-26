@@ -24,6 +24,8 @@ declare namespace Preferences {
   export type UsageDashboard = ExtensionPreferences & {}
   /** Preferences accessible in the `setup` command */
   export type Setup = ExtensionPreferences & {}
+  /** Preferences accessible in the `plugins` command */
+  export type Plugins = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -35,5 +37,7 @@ declare namespace Arguments {
   export type UsageDashboard = {}
   /** Arguments passed to the `setup` command */
   export type Setup = {}
+  /** Arguments passed to the `plugins` command */
+  export type Plugins = {}
 }
 

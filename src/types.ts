@@ -105,3 +105,98 @@ export interface DailyStats {
   inputTokens: number;
   outputTokens: number;
 }
+
+// ===== Plugin System Types =====
+
+/** Raw structure of installed_plugins.json */
+export interface InstalledPluginsFile {
+  version: number;
+  plugins: Record<string, PluginInstallation[]>;
+}
+
+export interface PluginInstallation {
+  scope: "user" | "local";
+  projectPath?: string;
+  installPath: string;
+  version: string;
+  installedAt: string;
+  lastUpdated: string;
+  gitCommitSha?: string;
+}
+
+/** Plugin metadata from .claude-plugin/plugin.json */
+export interface PluginMetadata {
+  name: string;
+  version?: string;
+  description?: string;
+  author?: { name: string; email?: string };
+  homepage?: string;
+  license?: string;
+  keywords?: string[];
+}
+
+/** Marketplace info from known_marketplaces.json */
+export interface MarketplaceInfo {
+  source: { source: string; repo: string };
+  installLocation: string;
+  lastUpdated: string;
+}
+
+/** Blocklist entry from blocklist.json */
+export interface BlocklistEntry {
+  plugin: string;
+  added_at?: string;
+  reason: string;
+  text: string;
+}
+
+/** Plugin contents discovered by scanning installPath */
+export interface PluginContents {
+  commands: string[];
+  skills: string[];
+  agents: string[];
+  mcpServers: string[];
+  hasReadme: boolean;
+}
+
+// ===== Skills System Types =====
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  dirName: string;
+  path: string;
+  isSymlink: boolean;
+  symlinkTarget?: string;
+  userInvokable: boolean;
+  source: "user" | "command" | "plugin";
+  pluginName?: string;
+}
+
+// ===== MCP Server Types =====
+
+export interface McpServerInfo {
+  name: string;
+  status: string;
+  statusDetail?: string;
+  type: string;
+  category: "user" | "cloud" | "builtin";
+  command?: string;
+  url?: string;
+  args?: string;
+  env?: string;
+}
+
+/** Fully merged plugin info for display */
+export interface PluginInfo {
+  key: string;
+  name: string;
+  marketplaceId: string;
+  enabled: boolean;
+  installation: PluginInstallation;
+  metadata: PluginMetadata | null;
+  marketplace: MarketplaceInfo | null;
+  blocklist: BlocklistEntry | null;
+  contents: PluginContents | null;
+  installPathExists: boolean;
+}

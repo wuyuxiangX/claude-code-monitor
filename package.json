@@ -36,6 +36,13 @@
       "subtitle": "Claude Code Monitor",
       "description": "One-click setup for Claude Code hooks to enable real-time session monitoring",
       "mode": "no-view"
+    },
+    {
+      "name": "plugins",
+      "title": "Claude Code Extensions",
+      "subtitle": "Claude Code Monitor",
+      "description": "Manage Claude Code extensions - plugins, skills, and MCP servers",
+      "mode": "view"
     }
   ],
   "preferences": [
