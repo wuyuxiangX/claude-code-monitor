@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import readline from "node:readline";
 import { SessionMetadata, SessionDetail, SessionMessage } from "../types";
+import { calculateEntryCost } from "./pricing";
 
 interface JSONLEntry {
   type: string;
@@ -11,6 +12,7 @@ interface JSONLEntry {
   uuid?: string;
   message?: {
     role: string;
+    model?: string;
     content: string | Array<{ type: string; text?: string }>;
     usage?: {
       input_tokens?: number;
@@ -19,8 +21,6 @@ interface JSONLEntry {
       cache_creation_input_tokens?: number;
     };
   };
-  costUSD?: number;
-  model?: string;
   timestamp?: string;
   gitBranch?: string;
 }
@@ -157,86 +157,243 @@ export async function listSessionFiles(
   }
 }
 
+// Disk-based usage cache to avoid re-parsing unchanged files
+interface UsageCacheEntry {
+  mtime: number;
+  turnCount: number;
+  cost: number;
+  model?: string;
+  summary: string;
+  firstMessage: string;
+  gitBranch?: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  id?: string;
+}
+
+const USAGE_CACHE_FILE = path.join(
+  os.homedir(),
+  ".claude",
+  "claude-code-monitor",
+  "usage-cache.json",
+);
+
+let usageCache: Record<string, UsageCacheEntry> | null = null;
+let usageCacheDirty = false;
+
+async function loadUsageCache(): Promise<Record<string, UsageCacheEntry>> {
+  if (usageCache) return usageCache;
+  try {
+    const data = await fs.promises.readFile(USAGE_CACHE_FILE, "utf8");
+    usageCache = JSON.parse(data);
+    return usageCache!;
+  } catch {
+    usageCache = {};
+    return usageCache;
+  }
+}
+
+async function flushUsageCache(): Promise<void> {
+  if (!usageCacheDirty || !usageCache) return;
+  try {
+    const dir = path.dirname(USAGE_CACHE_FILE);
+    await fs.promises.mkdir(dir, { recursive: true });
+    const tmp = USAGE_CACHE_FILE + ".tmp";
+    await fs.promises.writeFile(tmp, JSON.stringify(usageCache), "utf8");
+    await fs.promises.rename(tmp, USAGE_CACHE_FILE);
+    usageCacheDirty = false;
+  } catch {
+    // Ignore cache write failures
+  }
+}
+
+// Regex patterns for chunk-based extraction (compiled once)
+const RE_INPUT_TOKENS = /"input_tokens"\s*:\s*(\d+)/g;
+const RE_OUTPUT_TOKENS = /"output_tokens"\s*:\s*(\d+)/g;
+const RE_CACHE_READ = /"cache_read_input_tokens"\s*:\s*(\d+)/g;
+const RE_CACHE_CREATION = /"cache_creation_input_tokens"\s*:\s*(\d+)/g;
+const RE_MODEL = /"model"\s*:\s*"([^"]+)"/g;
+const RE_TYPE_ASSISTANT = /"type"\s*:\s*"assistant"/g;
+const RE_TYPE_USER = /"type"\s*:\s*"(?:user|human)"/g;
+const RE_GIT_BRANCH = /"gitBranch"\s*:\s*"([^"]+)"/;
+
+function sumAllMatches(text: string, re: RegExp): number {
+  re.lastIndex = 0;
+  let total = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    total += parseInt(m[1], 10);
+  }
+  return total;
+}
+
+function countMatches(text: string, re: RegExp): number {
+  re.lastIndex = 0;
+  let count = 0;
+  while (re.exec(text) !== null) count++;
+  return count;
+}
+
+function lastMatch(text: string, re: RegExp): string | undefined {
+  re.lastIndex = 0;
+  let last: string | undefined;
+  let m;
+  while ((m = re.exec(text)) !== null) last = m[1];
+  return last;
+}
+
 async function parseSessionMetadataFast(
   filePath: string,
+  mtime?: Date,
 ): Promise<Partial<SessionMetadata>> {
-  return new Promise((resolve) => {
-    const result: Partial<SessionMetadata> = {};
-    let lineCount = 0;
-    let turnCount = 0;
-    let totalCost = 0;
-    let resolved = false;
-
-    const safeResolve = () => {
-      if (resolved) return;
-      resolved = true;
-      result.turnCount = turnCount;
-      result.cost = totalCost;
-      resolve(result);
+  // Check disk cache
+  const cache = await loadUsageCache();
+  const mtimeMs = mtime?.getTime() || 0;
+  const cached = cache[filePath];
+  if (cached && cached.mtime === mtimeMs) {
+    return {
+      id: cached.id,
+      turnCount: cached.turnCount,
+      cost: cached.cost,
+      model: cached.model,
+      summary: cached.summary,
+      firstMessage: cached.firstMessage,
+      gitBranch: cached.gitBranch,
+      inputTokens: cached.inputTokens || undefined,
+      outputTokens: cached.outputTokens || undefined,
+      cacheReadTokens: cached.cacheReadTokens || undefined,
+      cacheCreationTokens: cached.cacheCreationTokens || undefined,
     };
+  }
 
-    const stream = fs.createReadStream(filePath, {
-      encoding: "utf8",
-      highWaterMark: 16 * 1024,
-    });
-    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  const result: Partial<SessionMetadata> = {};
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
+  let totalCost = 0;
+  let model: string | undefined;
+  let userTurns = 0;
+  let assistantTurns = 0;
 
-    const cleanup = () => {
-      rl.removeAllListeners();
-      stream.removeAllListeners();
-      rl.close();
-      stream.destroy();
-    };
+  // --- Pass 1: read first 8KB for metadata (summary, firstMessage) ---
+  const HEAD_SIZE = 8192;
+  let fd: fs.promises.FileHandle | null = null;
+  try {
+    fd = await fs.promises.open(filePath, "r");
+    const headBuf = Buffer.alloc(HEAD_SIZE);
+    const { bytesRead: headRead } = await fd.read(headBuf, 0, HEAD_SIZE, 0);
+    const head = headBuf.toString("utf8", 0, headRead);
+    const headLines = head.split("\n");
 
-    rl.on("line", (line) => {
-      if (resolved) return;
-      lineCount++;
-
+    for (const line of headLines) {
+      if (!line.trim() || line.length > 50000) continue;
       try {
         const entry: JSONLEntry = JSON.parse(line);
-
         if (entry.type === "summary") {
           result.summary = entry.summary || "";
           result.id = entry.leafUuid || path.basename(filePath, ".jsonl");
         }
-
-        if (entry.type === "user" || entry.type === "human") {
-          turnCount++;
-          if (!result.firstMessage && entry.message?.content) {
-            const content = entry.message.content;
-            if (typeof content === "string") {
-              result.firstMessage = content.slice(0, 200);
-            } else if (Array.isArray(content)) {
-              const textBlock = content.find((b) => b.type === "text");
-              result.firstMessage = textBlock?.text?.slice(0, 200) || "";
-            }
+        if (
+          (entry.type === "user" || entry.type === "human") &&
+          !result.firstMessage &&
+          entry.message?.content
+        ) {
+          const content = entry.message.content;
+          if (typeof content === "string") {
+            result.firstMessage = content.slice(0, 200);
+          } else if (Array.isArray(content)) {
+            const textBlock = content.find((b) => b.type === "text");
+            result.firstMessage = textBlock?.text?.slice(0, 200) || "";
           }
         }
-
-        if (entry.type === "assistant") turnCount++;
-        if (entry.costUSD) totalCost += entry.costUSD;
-        if (entry.model) result.model = entry.model;
-        if (entry.gitBranch) result.gitBranch = entry.gitBranch;
       } catch {
-        // Skip unparseable lines
+        // Skip
+      }
+    }
+
+    // --- Pass 2: chunk-based scan for tokens (fixed 256KB memory) ---
+    const CHUNK_SIZE = 256 * 1024;
+    const buf = Buffer.alloc(CHUNK_SIZE);
+    const stat = await fd.stat();
+    const fileSize = stat.size;
+    let pos = 0;
+    let carry = "";
+
+    while (pos < fileSize) {
+      const { bytesRead } = await fd.read(buf, 0, CHUNK_SIZE, pos);
+      if (bytesRead === 0) break;
+      const text = carry + buf.toString("utf8", 0, bytesRead);
+
+      // Sum token fields across all occurrences in this chunk
+      inputTokens += sumAllMatches(text, RE_INPUT_TOKENS);
+      outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS);
+      cacheReadTokens += sumAllMatches(text, RE_CACHE_READ);
+      cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION);
+
+      // Count turns
+      assistantTurns += countMatches(text, RE_TYPE_ASSISTANT);
+      userTurns += countMatches(text, RE_TYPE_USER);
+
+      // Extract model (keep last seen)
+      const m = lastMatch(text, RE_MODEL);
+      if (m) model = m;
+
+      // Extract gitBranch
+      if (!result.gitBranch) {
+        const gb = text.match(RE_GIT_BRANCH);
+        if (gb) result.gitBranch = gb[1];
       }
 
-      if (lineCount >= 50) {
-        cleanup();
-        safeResolve();
-      }
-    });
+      // Keep last 200 chars for boundary handling
+      carry = text.slice(-200);
+      pos += bytesRead;
+    }
+  } catch {
+    // File read error, return what we have
+  } finally {
+    if (fd) await fd.close();
+  }
 
-    rl.on("close", safeResolve);
-    rl.on("error", () => {
-      cleanup();
-      safeResolve();
+  // Calculate cost from total tokens
+  if (model && (inputTokens || outputTokens)) {
+    totalCost = calculateEntryCost(model, {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cache_read_input_tokens: cacheReadTokens,
+      cache_creation_input_tokens: cacheCreationTokens,
     });
-    stream.on("error", () => {
-      cleanup();
-      safeResolve();
-    });
-  });
+  }
+
+  const turnCount = userTurns + assistantTurns;
+  result.turnCount = turnCount;
+  result.cost = totalCost;
+  result.model = model;
+  result.inputTokens = inputTokens || undefined;
+  result.outputTokens = outputTokens || undefined;
+  result.cacheReadTokens = cacheReadTokens || undefined;
+  result.cacheCreationTokens = cacheCreationTokens || undefined;
+
+  // Write to cache
+  cache[filePath] = {
+    mtime: mtimeMs,
+    turnCount,
+    cost: totalCost,
+    model,
+    summary: result.summary || "",
+    firstMessage: result.firstMessage || "",
+    gitBranch: result.gitBranch,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    id: result.id,
+  };
+  usageCacheDirty = true;
+
+  return result;
 }
 
 /**
@@ -276,7 +433,7 @@ export async function listAllSessions(options?: {
 
   for (const { filePath, projectDir, mtime } of filesToParse) {
     try {
-      const metadata = await parseSessionMetadataFast(filePath);
+      const metadata = await parseSessionMetadataFast(filePath, mtime);
       const projectPath = await resolveProjectPath(projectDir);
 
       sessions.push({
@@ -291,11 +448,18 @@ export async function listAllSessions(options?: {
         cost: metadata.cost || 0,
         model: metadata.model,
         gitBranch: metadata.gitBranch,
+        inputTokens: metadata.inputTokens,
+        outputTokens: metadata.outputTokens,
+        cacheReadTokens: metadata.cacheReadTokens,
+        cacheCreationTokens: metadata.cacheCreationTokens,
       });
     } catch {
       // Skip
     }
   }
+
+  // Flush cache after batch parsing
+  await flushUsageCache();
 
   return sessions;
 }
@@ -389,15 +553,17 @@ async function parseFullSession(
           });
         }
 
-        if (entry.costUSD) totalCost += entry.costUSD;
-        if (entry.model) model = entry.model;
         if (entry.gitBranch) gitBranch = entry.gitBranch;
+        if (entry.message?.model) model = entry.message.model;
         if (entry.message?.usage) {
           const u = entry.message.usage;
           if (u.input_tokens) inputTokens += u.input_tokens;
           if (u.output_tokens) outputTokens += u.output_tokens;
           if (u.cache_read_input_tokens) cacheReadTokens += u.cache_read_input_tokens;
           if (u.cache_creation_input_tokens) cacheCreationTokens += u.cache_creation_input_tokens;
+          if (entry.message.model) {
+            totalCost += calculateEntryCost(entry.message.model, u);
+          }
         }
       } catch {
         // Skip

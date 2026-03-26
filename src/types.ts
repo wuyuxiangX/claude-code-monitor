@@ -86,7 +86,15 @@ export interface SessionMessage {
 export interface UsageStats {
   totalSessions: number;
   totalCost: number;
-  sessionsByProject: Record<string, { count: number; cost: number }>;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalCacheCreationTokens: number;
+  sessionsByProject: Record<
+    string,
+    { count: number; cost: number; inputTokens: number; outputTokens: number }
+  >;
+  modelBreakdown: Record<string, { sessions: number; cost: number }>;
   topSessions: SessionMetadata[];
 }
 
@@ -94,4 +102,6 @@ export interface DailyStats {
   date: string;
   sessions: number;
   cost: number;
+  inputTokens: number;
+  outputTokens: number;
 }
