@@ -1,9 +1,9 @@
 import { getPreferenceValues } from "@raycast/api";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Session } from "../types";
 
-const execPromise = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Editors: CLI command that focuses the project window
 const EDITOR_COMMANDS: Record<string, string> = {
@@ -39,29 +39,43 @@ export async function resumeSession(
   cwd: string,
   termProgram?: string,
 ): Promise<void> {
+  // Validate sessionId to prevent injection
+  if (!/^[a-f0-9-]+$/i.test(sessionId)) {
+    throw new Error("Invalid session ID format");
+  }
+
   const cmd = `claude --resume "${sessionId}"`;
+  const cdAndCmd = `cd ${cwd.replace(/'/g, "\\'")} && ${cmd}`;
 
   if (termProgram === "Apple_Terminal") {
-    await execPromise(
-      `osascript -e 'tell application "Terminal" to do script "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
-    );
-    await execPromise(`open -a "Terminal"`);
+    await execFileAsync("osascript", [
+      "-e",
+      `tell application "Terminal" to do script "${cdAndCmd}"`,
+    ]);
+    await execFileAsync("open", ["-a", "Terminal"]);
   } else if (termProgram === "iTerm.app") {
-    await execPromise(
-      `osascript -e 'tell application "iTerm" to create window with default profile command "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
-    );
+    await execFileAsync("osascript", [
+      "-e",
+      `tell application "iTerm" to create window with default profile command "${cdAndCmd}"`,
+    ]);
   } else if (termProgram === "WarpTerminal") {
-    await execPromise(
-      `osascript -e 'tell application "Warp" to activate' -e 'delay 0.3' -e 'tell application "System Events" to keystroke "t" using command down'`,
-    );
+    await execFileAsync("osascript", [
+      "-e",
+      'tell application "Warp" to activate',
+      "-e",
+      "delay 0.3",
+      "-e",
+      'tell application "System Events" to keystroke "t" using command down',
+    ]);
     // Warp doesn't have great AppleScript support, open and let user paste
-    await execPromise(`open -a "Warp"`);
+    await execFileAsync("open", ["-a", "Warp"]);
   } else {
     // For editors (zed, vscode, cursor) or unknown terminals, open default terminal
-    await execPromise(
-      `osascript -e 'tell application "Terminal" to do script "cd ${cwd.replace(/'/g, "\\'")} && ${cmd}"'`,
-    );
-    await execPromise(`open -a "Terminal"`);
+    await execFileAsync("osascript", [
+      "-e",
+      `tell application "Terminal" to do script "${cdAndCmd}"`,
+    ]);
+    await execFileAsync("open", ["-a", "Terminal"]);
   }
 }
 
@@ -77,10 +91,10 @@ export async function focusSession(session: Session): Promise<void> {
   const editorCmd = EDITOR_COMMANDS[termProgram];
   if (editorCmd) {
     try {
-      await execPromise(`${editorCmd} "${cwd}"`);
+      await execFileAsync(editorCmd, [cwd]);
     } catch {
       // Editor CLI not found, try open -a
-      await execPromise(`open -a "${termProgram}"`).catch(() => {});
+      await execFileAsync("open", ["-a", termProgram]).catch(() => {});
     }
     return;
   }
@@ -88,9 +102,9 @@ export async function focusSession(session: Session): Promise<void> {
   // 2. Terminal: activate the app
   const appName = TERMINAL_APPS[termProgram] || termProgram;
   try {
-    await execPromise(`open -a "${appName}"`);
+    await execFileAsync("open", ["-a", appName]);
   } catch {
     // Fallback: try using the raw term_program value
-    await execPromise(`open -a "${termProgram}"`).catch(() => {});
+    await execFileAsync("open", ["-a", termProgram]).catch(() => {});
   }
 }

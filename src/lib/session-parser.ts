@@ -4,6 +4,19 @@ import os from "node:os";
 import readline from "node:readline";
 import { SessionMetadata, SessionDetail, SessionMessage } from "../types";
 import { calculateEntryCost } from "./pricing";
+import {
+  RE_INPUT_TOKENS,
+  RE_OUTPUT_TOKENS,
+  RE_CACHE_READ,
+  RE_CACHE_CREATION,
+  RE_MODEL,
+  RE_TYPE_ASSISTANT,
+  RE_TYPE_USER,
+  RE_GIT_BRANCH,
+  sumAllMatches,
+  countMatches,
+  lastMatch,
+} from "./jsonl-utils";
 
 interface JSONLEntry {
   type: string;
@@ -158,7 +171,7 @@ export async function listSessionFiles(
 }
 
 // Disk-based usage cache to avoid re-parsing unchanged files
-interface UsageCacheEntry {
+interface SessionParserCacheEntry {
   mtime: number;
   turnCount: number;
   cost: number;
@@ -180,10 +193,10 @@ const USAGE_CACHE_FILE = path.join(
   "usage-cache.json",
 );
 
-let usageCache: Record<string, UsageCacheEntry> | null = null;
+let usageCache: Record<string, SessionParserCacheEntry> | null = null;
 let usageCacheDirty = false;
 
-async function loadUsageCache(): Promise<Record<string, UsageCacheEntry>> {
+async function loadUsageCache(): Promise<Record<string, SessionParserCacheEntry>> {
   if (usageCache) return usageCache;
   try {
     const data = await fs.promises.readFile(USAGE_CACHE_FILE, "utf8");
@@ -207,41 +220,6 @@ async function flushUsageCache(): Promise<void> {
   } catch {
     // Ignore cache write failures
   }
-}
-
-// Regex patterns for chunk-based extraction (compiled once)
-const RE_INPUT_TOKENS = /"input_tokens"\s*:\s*(\d+)/g;
-const RE_OUTPUT_TOKENS = /"output_tokens"\s*:\s*(\d+)/g;
-const RE_CACHE_READ = /"cache_read_input_tokens"\s*:\s*(\d+)/g;
-const RE_CACHE_CREATION = /"cache_creation_input_tokens"\s*:\s*(\d+)/g;
-const RE_MODEL = /"model"\s*:\s*"([^"]+)"/g;
-const RE_TYPE_ASSISTANT = /"type"\s*:\s*"assistant"/g;
-const RE_TYPE_USER = /"type"\s*:\s*"(?:user|human)"/g;
-const RE_GIT_BRANCH = /"gitBranch"\s*:\s*"([^"]+)"/;
-
-function sumAllMatches(text: string, re: RegExp): number {
-  re.lastIndex = 0;
-  let total = 0;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    total += parseInt(m[1], 10);
-  }
-  return total;
-}
-
-function countMatches(text: string, re: RegExp): number {
-  re.lastIndex = 0;
-  let count = 0;
-  while (re.exec(text) !== null) count++;
-  return count;
-}
-
-function lastMatch(text: string, re: RegExp): string | undefined {
-  re.lastIndex = 0;
-  let last: string | undefined;
-  let m;
-  while ((m = re.exec(text)) !== null) last = m[1];
-  return last;
 }
 
 async function parseSessionMetadataFast(

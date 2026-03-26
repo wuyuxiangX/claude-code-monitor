@@ -4,6 +4,7 @@ import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { McpServerInfo, InstalledPluginsFile } from "../types";
+import { readJsonFile, buildClaudeEnv } from "./fs-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -11,14 +12,6 @@ const HOME = os.homedir();
 const CLAUDE_JSON_PATH = path.join(HOME, ".claude.json");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
 const INSTALLED_PLUGINS_PATH = path.join(HOME, ".claude", "plugins", "installed_plugins.json");
-
-function readJsonFile<T>(filePath: string): T | null {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
 
 function getShellProxy(): Record<string, string> {
   // Raycast (GUI app) doesn't source ~/.zshrc, so proxy env vars are missing.
@@ -39,18 +32,7 @@ function getShellProxy(): Record<string, string> {
 }
 
 function buildEnv() {
-  const extraPaths = [
-    path.join(HOME, ".local", "share", "fnm", "aliases", "default", "bin"),
-    path.join(HOME, ".local", "bin"),
-    "/usr/local/bin",
-    "/opt/homebrew/bin",
-  ].join(":");
-  const basePath = process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin";
-  return {
-    ...process.env,
-    PATH: `${extraPaths}:${basePath}`,
-    ...getShellProxy(),
-  };
+  return buildClaudeEnv(getShellProxy());
 }
 
 interface McpConfigEntry {

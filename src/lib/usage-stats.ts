@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { UsageStats, DailyStats, SessionMetadata } from "../types";
+import { UsageStats, DailyStats, SessionMetadata, ProjectStats, UsageCacheEntry } from "../types";
 import { formatTokens, normalizeModelName } from "./pricing";
 
 const execPromise = promisify(exec);
@@ -38,62 +38,9 @@ interface CacheEntry {
  */
 async function runScanner(afterDate: Date): Promise<void> {
   const scannerPath = path.join(__dirname, "scanner.js");
-  // Check if built scanner exists, else use inline
-  try {
-    await fs.promises.access(scannerPath);
-    await execPromise(`node "${scannerPath}" ${afterDate.getTime()}`, {
-      timeout: 30000,
-      maxBuffer: 1024 * 1024,
-    });
-  } catch {
-    // Fallback: inline scanner via node -e
-    await runInlineScanner(afterDate);
-  }
-}
-
-async function runInlineScanner(afterDate: Date): Promise<void> {
-  const projectsDir = path.join(os.homedir(), ".claude", "projects");
-  // Minimal inline script that scans and writes cache
-  const script = `
-const fs=require('fs'),path=require('path'),os=require('os');
-const PD='${projectsDir}',CF='${CACHE_FILE}';
-const AD=${afterDate.getTime()};
-let c={};try{c=JSON.parse(fs.readFileSync(CF,'utf8'))}catch{}
-const RI=/"input_tokens"\\s*:\\s*(\\d+)/g,RO=/"output_tokens"\\s*:\\s*(\\d+)/g;
-const RC=/"cache_read_input_tokens"\\s*:\\s*(\\d+)/g,RW=/"cache_creation_input_tokens"\\s*:\\s*(\\d+)/g;
-const RM=/"model"\\s*:\\s*"([^"]+)"/g,RA=/"type"\\s*:\\s*"assistant"/g,RU=/"type"\\s*:\\s*"(?:user|human)"/g;
-const RB=/"gitBranch"\\s*:\\s*"([^"]+)"/;
-function sa(t,r){r.lastIndex=0;let s=0,m;while((m=r.exec(t))!==null)s+=parseInt(m[1]);return s}
-function ca(t,r){r.lastIndex=0;let n=0;while(r.exec(t)!==null)n++;return n}
-function la(t,r){r.lastIndex=0;let l,m;while((m=r.exec(t))!==null)l=m[1];return l}
-const P={opus:{i:15,o:75,cr:3.75,cw:18.75},sonnet:{i:3,o:15,cr:0.3,cw:3.75},haiku:{i:0.8,o:4,cr:0.08,cw:1}};
-function cc(md,it,ot,cr,cw){const l=md.toLowerCase();const p=l.includes('opus')?P.opus:l.includes('haiku')?P.haiku:P.sonnet;return it/1e6*p.i+ot/1e6*p.o+cr/1e6*p.cr+cw/1e6*p.cw}
-let dirty=false;
-const dirs=fs.readdirSync(PD,{withFileTypes:true});
-for(const d of dirs){if(!d.isDirectory())continue;const dp=path.join(PD,d.name);
-let files;try{files=fs.readdirSync(dp).filter(f=>f.endsWith('.jsonl'))}catch{continue}
-const pp='/'+d.name.slice(1).replace(/-/g,'/'),pn=path.basename(pp)||pp;
-for(const f of files){const fp=path.join(dp,f);let st;try{st=fs.statSync(fp)}catch{continue}
-if(st.mtime.getTime()<AD)continue;const mt=st.mtime.getTime();
-if(c[fp]&&c[fp].mtime===mt){if(!c[fp].projectPath){c[fp].projectPath=pp;c[fp].projectName=pn;dirty=true}continue}
-let it=0,ot=0,cr2=0,cc2=0,md,at=0,ut=0,gb,sm='',fm='',id;
-const fd=fs.openSync(fp,'r');try{
-const hb=Buffer.alloc(8192);const hr=fs.readSync(fd,hb,0,8192,0);const h=hb.toString('utf8',0,hr);
-for(const ln of h.split('\\n')){if(!ln.trim()||ln.length>50000)continue;try{const e=JSON.parse(ln);
-if(e.type==='summary'){sm=e.summary||'';id=e.leafUuid||path.basename(fp,'.jsonl')}
-if((e.type==='user'||e.type==='human')&&!fm&&e.message?.content){const cnt=e.message.content;
-if(typeof cnt==='string')fm=cnt.slice(0,200);else if(Array.isArray(cnt)){const tb=cnt.find(b=>b.type==='text');fm=tb?.text?.slice(0,200)||''}}}catch{}}
-const CK=256*1024,buf=Buffer.alloc(CK);let pos=0,carry='';
-while(pos<st.size){const br=fs.readSync(fd,buf,0,CK,pos);if(!br)break;const tx=carry+buf.toString('utf8',0,br);
-it+=sa(tx,RI);ot+=sa(tx,RO);cr2+=sa(tx,RC);cc2+=sa(tx,RW);at+=ca(tx,RA);ut+=ca(tx,RU);
-const m2=la(tx,RM);if(m2)md=m2;if(!gb){const g=tx.match(RB);if(g)gb=g[1]}
-carry=tx.slice(-200);pos+=br}}finally{fs.closeSync(fd)}
-const cost=md&&(it||ot)?cc(md,it,ot,cr2,cc2):0;
-c[fp]={mtime:mt,turnCount:ut+at,cost,model:md,summary:sm,firstMessage:fm,gitBranch:gb,inputTokens:it,outputTokens:ot,cacheReadTokens:cr2,cacheCreationTokens:cc2,id:id||path.basename(fp,'.jsonl'),projectPath:pp,projectName:pn};dirty=true}}
-if(dirty){fs.mkdirSync(path.dirname(CF),{recursive:true});const tmp=CF+'.tmp';fs.writeFileSync(tmp,JSON.stringify(c));fs.renameSync(tmp,CF)}
-`;
-  await execPromise(`node -e '${script.replace(/'/g, "'\\''")}'`, {
-    timeout: 60000,
+  await fs.promises.access(scannerPath);
+  await execPromise(`node "${scannerPath}" ${afterDate.getTime()}`, {
+    timeout: 30000,
     maxBuffer: 1024 * 1024,
   });
 }
@@ -147,10 +94,7 @@ function calculateStats(sessions: SessionMetadata[]): UsageStats {
   let totalCacheReadTokens = 0;
   let totalCacheCreationTokens = 0;
 
-  const sessionsByProject: Record<
-    string,
-    { count: number; cost: number; inputTokens: number; outputTokens: number }
-  > = {};
+  const sessionsByProject: Record<string, ProjectStats> = {};
   const projectCostCents: Record<string, number> = {};
   const modelBreakdown: Record<string, { sessions: number; cost: number }> = {};
 
@@ -292,10 +236,7 @@ export function generateCostChart(dailyStats: DailyStats[]): string {
 }
 
 export function generateProjectTable(
-  sessionsByProject: Record<
-    string,
-    { count: number; cost: number; inputTokens: number; outputTokens: number }
-  >,
+  sessionsByProject: Record<string, ProjectStats>,
 ): string {
   const sorted = Object.entries(sessionsByProject)
     .sort(([, a], [, b]) => b.cost - a.cost)

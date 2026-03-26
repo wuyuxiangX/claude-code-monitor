@@ -1,7 +1,22 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, basename } from "node:path";
-import { HookSession, HookStateFile, SessionState } from "../types";
+import { join, basename, dirname } from "node:path";
+import { HookSession, HookStateFile, HookStateRaw, SessionState } from "../types";
+
+function atomicWriteSync(filePath: string, data: string): void {
+  const tmpPath = join(dirname(filePath), `.tmp-${process.pid}-${Date.now()}`);
+  writeFileSync(tmpPath, data);
+  renameSync(tmpPath, filePath);
+}
+
+function mutateHookState(mutator: (sessions: Record<string, HookStateRaw>) => void): boolean {
+  if (!existsSync(STATE_FILE)) return false;
+  const raw = readFileSync(STATE_FILE, "utf-8");
+  const data: HookStateFile = JSON.parse(raw);
+  mutator(data.sessions);
+  atomicWriteSync(STATE_FILE, JSON.stringify(data, null, 2));
+  return true;
+}
 
 const WORKTREE_PATTERN = /\/\.claude\/worktrees\/([^/]+)$/;
 const LABEL_PROMPT_PREFIX = "用不超过10个字概括这个请求的核心目的";
@@ -87,15 +102,10 @@ export function getActiveHookSessions(): HookSession[] {
 }
 
 export function deleteHookSession(sessionId: string): boolean {
-  if (!existsSync(STATE_FILE)) return false;
-
   try {
-    const raw = readFileSync(STATE_FILE, "utf-8");
-    const data: HookStateFile = JSON.parse(raw);
-    if (!(sessionId in data.sessions)) return false;
-    delete data.sessions[sessionId];
-    writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
-    return true;
+    return mutateHookState((sessions) => {
+      delete sessions[sessionId];
+    });
   } catch {
     return false;
   }
@@ -105,14 +115,12 @@ export function updateSessionLabel(
   sessionId: string,
   label: string,
 ): boolean {
-  if (!existsSync(STATE_FILE)) return false;
   try {
-    const raw = readFileSync(STATE_FILE, "utf-8");
-    const data: HookStateFile = JSON.parse(raw);
-    if (!(sessionId in data.sessions)) return false;
-    data.sessions[sessionId].label = label;
-    writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
-    return true;
+    return mutateHookState((sessions) => {
+      if (sessionId in sessions) {
+        sessions[sessionId].label = label;
+      }
+    });
   } catch {
     return false;
   }

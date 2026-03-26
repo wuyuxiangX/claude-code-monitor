@@ -17,48 +17,11 @@ import { getSessionDetail } from "./lib/session-parser";
 import { focusSession, resumeSession } from "./lib/terminal";
 import { formatRelativeTime, formatDuration } from "./lib/time";
 import { formatCost } from "./lib/usage-stats";
+import { STATE_CONFIG, DEFAULT_STATE_CONFIG, APP_LABELS, getSessionTitle } from "./lib/constants";
 import {
   Session,
-  SessionState,
   SessionDetail as SessionDetailType,
 } from "./types";
-
-const STATE_CONFIG: Record<
-  SessionState,
-  { icon: Icon; color: Color; label: string }
-> = {
-  active: { icon: Icon.CircleFilled, color: Color.Green, label: "Active" },
-  waiting: {
-    icon: Icon.ExclamationMark,
-    color: Color.Orange,
-    label: "Waiting",
-  },
-  idle: { icon: Icon.Circle, color: Color.Yellow, label: "Idle" },
-  ended: {
-    icon: Icon.CircleDisabled,
-    color: Color.SecondaryText,
-    label: "Ended",
-  },
-};
-
-const DEFAULT_STATE_CONFIG = {
-  icon: Icon.QuestionMarkCircle,
-  color: Color.SecondaryText,
-  label: "Unknown",
-};
-
-const APP_LABELS: Record<string, string> = {
-  vscode: "VS Code",
-  cursor: "Cursor",
-  zed: "Zed",
-  windsurf: "Windsurf",
-  Apple_Terminal: "Terminal",
-  "iTerm.app": "iTerm2",
-  WarpTerminal: "Warp",
-  ghostty: "Ghostty",
-  kitty: "kitty",
-  tmux: "tmux",
-};
 
 function getAppLabel(termProgram: string): string {
   return APP_LABELS[termProgram] || termProgram;
@@ -86,11 +49,14 @@ export default function SessionsCommand() {
     );
   }
 
-  const isEmpty =
-    activeSessions.length === 0 &&
-    waitingSessions.length === 0 &&
-    idleSessions.length === 0 &&
-    endedSessions.length === 0;
+  const sections = [
+    { title: "Waiting for Input", sessions: waitingSessions },
+    { title: "Active", sessions: activeSessions },
+    { title: "Idle", sessions: idleSessions },
+    { title: "Ended", sessions: endedSessions },
+  ];
+
+  const isEmpty = sections.every((s) => s.sessions.length === 0);
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search sessions...">
@@ -101,37 +67,19 @@ export default function SessionsCommand() {
           icon={Icon.Terminal}
         />
       )}
-      {waitingSessions.length > 0 && (
-        <List.Section
-          title="Waiting for Input"
-          subtitle={`${waitingSessions.length}`}
-        >
-          {waitingSessions.map((s) => (
-            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
-          ))}
-        </List.Section>
-      )}
-      {activeSessions.length > 0 && (
-        <List.Section title="Active" subtitle={`${activeSessions.length}`}>
-          {activeSessions.map((s) => (
-            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
-          ))}
-        </List.Section>
-      )}
-      {idleSessions.length > 0 && (
-        <List.Section title="Idle" subtitle={`${idleSessions.length}`}>
-          {idleSessions.map((s) => (
-            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
-          ))}
-        </List.Section>
-      )}
-      {endedSessions.length > 0 && (
-        <List.Section title="Ended" subtitle={`${endedSessions.length}`}>
-          {endedSessions.map((s) => (
-            <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
-          ))}
-        </List.Section>
-      )}
+      {sections
+        .filter((s) => s.sessions.length > 0)
+        .map((section) => (
+          <List.Section
+            key={section.title}
+            title={section.title}
+            subtitle={`${section.sessions.length}`}
+          >
+            {section.sessions.map((s) => (
+              <SessionItem key={s.session_id} session={s} onDelete={revalidate} />
+            ))}
+          </List.Section>
+        ))}
     </List>
   );
 }
@@ -172,14 +120,14 @@ function SessionItem({
   accessories.push({ text: duration });
   accessories.push({ text: lastUpdate });
 
-  const title =
-    session.project_name ||
-    (session.session_id ? session.session_id.slice(0, 12) : "Unknown");
+  const title = getSessionTitle(session);
+  const cleanPrompt = session.first_prompt?.replace(/\n+/g, " ").trim() ?? "";
+  const subtitle = session.label || (cleanPrompt.length > 50 ? cleanPrompt.slice(0, 50) + "..." : cleanPrompt);
 
   return (
     <List.Item
       title={title}
-      subtitle={session.label || (session.first_prompt ? (session.first_prompt.replace(/\n+/g, " ").trim().length > 50 ? session.first_prompt.replace(/\n+/g, " ").trim().slice(0, 50) + "…" : session.first_prompt.replace(/\n+/g, " ").trim()) : "")}
+      subtitle={subtitle}
       icon={{ source: config.icon, tintColor: config.color }}
       accessories={accessories}
       actions={
@@ -269,9 +217,14 @@ function SessionDetailView({ sessionId, session: parentSession }: { sessionId: s
 
   useEffect(() => {
     async function load() {
-      const d = await getSessionDetail(sessionId);
-      setDetail(d);
-      setIsLoading(false);
+      try {
+        const d = await getSessionDetail(sessionId);
+        setDetail(d);
+      } catch (e) {
+        console.error("Failed to load session detail:", e);
+      } finally {
+        setIsLoading(false);
+      }
     }
     load();
   }, [sessionId]);

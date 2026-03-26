@@ -2,20 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { SkillInfo, InstalledPluginsFile } from "../types";
+import { readJsonFile } from "./fs-utils";
 
 const HOME = os.homedir();
 const SKILLS_DIR = path.join(HOME, ".claude", "skills");
 const COMMANDS_DIR = path.join(HOME, ".claude", "commands");
 const SETTINGS_PATH = path.join(HOME, ".claude", "settings.json");
 const INSTALLED_PLUGINS_PATH = path.join(HOME, ".claude", "plugins", "installed_plugins.json");
-
-function readJsonFile<T>(filePath: string): T | null {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
 
 function parseSkillFrontmatter(content: string): {
   name?: string;
@@ -208,6 +201,10 @@ export async function loadAllSkills(): Promise<SkillInfo[]> {
 
 export function uninstallSkill(dirName: string): void {
   const fullPath = path.join(SKILLS_DIR, dirName);
+  // Prevent path traversal
+  if (!fullPath.startsWith(SKILLS_DIR + path.sep) && fullPath !== SKILLS_DIR) {
+    throw new Error("Invalid skill path");
+  }
   const lstat = fs.lstatSync(fullPath);
 
   if (lstat.isSymbolicLink()) {

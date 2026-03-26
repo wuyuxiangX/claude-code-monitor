@@ -9,16 +9,8 @@ import { useSessions } from "./hooks/useSessions";
 import { focusSession } from "./lib/terminal";
 import { formatRelativeTime, formatDuration } from "./lib/time";
 import { formatCost } from "./lib/usage-stats";
-import { Session, SessionState } from "./types";
-
-const STATE_ICON: Record<SessionState, { source: Icon; tintColor: Color }> = {
-  active: { source: Icon.CircleFilled, tintColor: Color.Green },
-  waiting: { source: Icon.ExclamationMark, tintColor: Color.Orange },
-  idle: { source: Icon.Circle, tintColor: Color.Yellow },
-  ended: { source: Icon.CircleDisabled, tintColor: Color.SecondaryText },
-};
-
-const DEFAULT_ICON = { source: Icon.Circle, tintColor: Color.SecondaryText };
+import { STATE_CONFIG, DEFAULT_STATE_CONFIG, getSessionTitle } from "./lib/constants";
+import { Session } from "./types";
 
 export default function MenuBarCommand() {
   const {
@@ -108,7 +100,8 @@ export default function MenuBarCommand() {
 }
 
 function SessionMenuItem({ session }: { session: Session }) {
-  const stateIcon = STATE_ICON[session.state] || DEFAULT_ICON;
+  const config = STATE_CONFIG[session.state] || DEFAULT_STATE_CONFIG;
+  const stateIcon = { source: config.icon, tintColor: config.color };
   const startedAt = session.started_at || Date.now();
   const endedAt = session.ended_at ?? Date.now();
   const duration = formatDuration(startedAt, endedAt);
@@ -118,16 +111,14 @@ function SessionMenuItem({ session }: { session: Session }) {
       ? ` | ${formatCost(session.cost)}`
       : "";
 
-  const title =
-    session.project_name ||
-    (session.session_id ? session.session_id.slice(0, 12) : "Unknown");
+  const title = getSessionTitle(session);
 
   return (
     <MenuBarExtra.Item
       title={title}
       subtitle={`${duration} | ${lastUpdate}${costStr}`}
       icon={stateIcon}
-      onAction={() => focusSession(session)}
+      onAction={() => focusSession(session).catch(console.error)}
     />
   );
 }

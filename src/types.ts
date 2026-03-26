@@ -48,28 +48,14 @@ export interface SessionMetadata {
 }
 
 /** Merged session combining hook state + JSONL metadata */
-export interface Session {
-  session_id: string;
-  cwd: string;
-  project_name: string;
-  state: SessionState;
-  started_at: number;
-  last_updated_at: number;
-  ended_at: number | null;
-  last_event: string;
-  // JSONL metadata (may be undefined if not matched)
+export interface Session extends Omit<HookSession, "source"> {
+  // JSONL 元数据字段 (仅从 transcript 文件解析得到)
   summary?: string;
   firstMessage?: string;
   turnCount?: number;
   cost?: number;
   model?: string;
-  transcript_path?: string;
-  term_program?: string;
   gitBranch?: string;
-  label?: string;
-  first_prompt?: string;
-  is_worktree?: boolean;
-  worktree_name?: string;
 }
 
 export interface SessionDetail extends SessionMetadata {
@@ -83,6 +69,26 @@ export interface SessionMessage {
   toolUse?: boolean;
 }
 
+export interface UsageCacheEntry {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  cost: number;
+  model: string;
+  turns: number;
+  lastModified: number;
+  projectPath?: string;
+  projectName?: string;
+}
+
+export interface ProjectStats {
+  count: number;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface UsageStats {
   totalSessions: number;
   totalCost: number;
@@ -90,10 +96,7 @@ export interface UsageStats {
   totalOutputTokens: number;
   totalCacheReadTokens: number;
   totalCacheCreationTokens: number;
-  sessionsByProject: Record<
-    string,
-    { count: number; cost: number; inputTokens: number; outputTokens: number }
-  >;
+  sessionsByProject: Record<string, ProjectStats>;
   modelBreakdown: Record<string, { sessions: number; cost: number }>;
   topSessions: SessionMetadata[];
 }
@@ -175,12 +178,15 @@ export interface SkillInfo {
 
 // ===== MCP Server Types =====
 
+export type McpStatus = "Connected" | "Needs Auth" | "Unreachable" | "Unknown" | (string & {});
+export type McpCategory = "user" | "cloud" | "builtin";
+
 export interface McpServerInfo {
   name: string;
-  status: string;
+  status: McpStatus;
   statusDetail?: string;
   type: string;
-  category: "user" | "cloud" | "builtin";
+  category: McpCategory;
   command?: string;
   url?: string;
   args?: string;

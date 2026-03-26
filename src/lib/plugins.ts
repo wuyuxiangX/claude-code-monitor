@@ -12,6 +12,7 @@ import type {
   PluginContents,
   PluginInfo,
 } from "../types";
+import { readJsonFile, buildClaudeEnv } from "./fs-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,15 +21,6 @@ const INSTALLED_PLUGINS_PATH = path.join(CLAUDE_DIR, "plugins", "installed_plugi
 const SETTINGS_PATH = path.join(CLAUDE_DIR, "settings.json");
 const BLOCKLIST_PATH = path.join(CLAUDE_DIR, "plugins", "blocklist.json");
 const KNOWN_MARKETPLACES_PATH = path.join(CLAUDE_DIR, "plugins", "known_marketplaces.json");
-
-function readJsonFile<T>(filePath: string): T | null {
-  try {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
 
 function readInstalledPlugins(): Record<string, PluginInstallation[]> {
   const data = readJsonFile<InstalledPluginsFile>(INSTALLED_PLUGINS_PATH);
@@ -166,15 +158,9 @@ export async function loadAllPlugins(): Promise<PluginInfo[]> {
 // ===== Plugin operations via Claude CLI =====
 
 async function runClaudePlugin(...args: string[]): Promise<string> {
-  const home = os.homedir();
-  const extraPaths = [
-    path.join(home, ".local", "bin"),
-    "/usr/local/bin",
-    "/opt/homebrew/bin",
-  ].join(":");
   const { stdout } = await execFileAsync("claude", ["plugin", ...args], {
     timeout: 30000,
-    env: { ...process.env, PATH: `${extraPaths}:${process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin"}` },
+    env: buildClaudeEnv(),
   });
   return stdout.trim();
 }

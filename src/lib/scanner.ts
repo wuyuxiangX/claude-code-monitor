@@ -10,6 +10,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { calculateEntryCost } from "./pricing";
+import { getProjectName } from "./session-parser";
+import {
+  RE_INPUT_TOKENS,
+  RE_OUTPUT_TOKENS,
+  RE_CACHE_READ,
+  RE_CACHE_CREATION,
+  RE_MODEL,
+  RE_TYPE_ASSISTANT,
+  RE_TYPE_USER,
+  RE_GIT_BRANCH,
+  sumAllMatches,
+  countMatches,
+  lastMatch,
+} from "./jsonl-utils";
 
 const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 const CACHE_FILE = path.join(
@@ -34,70 +49,6 @@ interface CacheEntry {
   id?: string;
   projectPath: string;
   projectName: string;
-}
-
-// Pricing (per million tokens)
-const PRICING: Record<string, { i: number; o: number; cr: number; cw: number }> = {
-  opus: { i: 15, o: 75, cr: 3.75, cw: 18.75 },
-  sonnet: { i: 3, o: 15, cr: 0.3, cw: 3.75 },
-  haiku: { i: 0.8, o: 4, cr: 0.08, cw: 1 },
-};
-
-function calcCost(
-  model: string,
-  it: number,
-  ot: number,
-  cr: number,
-  cc: number,
-): number {
-  const lower = model.toLowerCase();
-  const p = lower.includes("opus")
-    ? PRICING.opus
-    : lower.includes("haiku")
-      ? PRICING.haiku
-      : PRICING.sonnet;
-  return (
-    (it / 1e6) * p.i +
-    (ot / 1e6) * p.o +
-    (cr / 1e6) * p.cr +
-    (cc / 1e6) * p.cw
-  );
-}
-
-const RE_IT = /"input_tokens"\s*:\s*(\d+)/g;
-const RE_OT = /"output_tokens"\s*:\s*(\d+)/g;
-const RE_CR = /"cache_read_input_tokens"\s*:\s*(\d+)/g;
-const RE_CC = /"cache_creation_input_tokens"\s*:\s*(\d+)/g;
-const RE_MODEL = /"model"\s*:\s*"([^"]+)"/g;
-const RE_ASSISTANT = /"type"\s*:\s*"assistant"/g;
-const RE_USER = /"type"\s*:\s*"(?:user|human)"/g;
-const RE_BRANCH = /"gitBranch"\s*:\s*"([^"]+)"/;
-
-function sumAll(text: string, re: RegExp): number {
-  re.lastIndex = 0;
-  let s = 0;
-  let m;
-  while ((m = re.exec(text)) !== null) s += parseInt(m[1], 10);
-  return s;
-}
-
-function countAll(text: string, re: RegExp): number {
-  re.lastIndex = 0;
-  let c = 0;
-  while (re.exec(text) !== null) c++;
-  return c;
-}
-
-function lastOf(text: string, re: RegExp): string | undefined {
-  re.lastIndex = 0;
-  let last: string | undefined;
-  let m;
-  while ((m = re.exec(text)) !== null) last = m[1];
-  return last;
-}
-
-function getProjectName(projectPath: string): string {
-  return path.basename(projectPath) || projectPath;
 }
 
 async function main() {
@@ -206,18 +157,18 @@ async function main() {
           if (!bytesRead) break;
           const text = carry + buf.toString("utf8", 0, bytesRead);
 
-          inputTokens += sumAll(text, RE_IT);
-          outputTokens += sumAll(text, RE_OT);
-          cacheReadTokens += sumAll(text, RE_CR);
-          cacheCreationTokens += sumAll(text, RE_CC);
-          assistantTurns += countAll(text, RE_ASSISTANT);
-          userTurns += countAll(text, RE_USER);
+          inputTokens += sumAllMatches(text, RE_INPUT_TOKENS);
+          outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS);
+          cacheReadTokens += sumAllMatches(text, RE_CACHE_READ);
+          cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION);
+          assistantTurns += countMatches(text, RE_TYPE_ASSISTANT);
+          userTurns += countMatches(text, RE_TYPE_USER);
 
-          const m = lastOf(text, RE_MODEL);
+          const m = lastMatch(text, RE_MODEL);
           if (m) model = m;
 
           if (!gitBranch) {
-            const gb = text.match(RE_BRANCH);
+            const gb = text.match(RE_GIT_BRANCH);
             if (gb) gitBranch = gb[1];
           }
 
@@ -230,7 +181,12 @@ async function main() {
 
       const cost =
         model && (inputTokens || outputTokens)
-          ? calcCost(model, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens)
+          ? calculateEntryCost(model, {
+              input_tokens: inputTokens,
+              output_tokens: outputTokens,
+              cache_read_input_tokens: cacheReadTokens,
+              cache_creation_input_tokens: cacheCreationTokens,
+            })
           : 0;
 
       cache[fp] = {

@@ -1,8 +1,8 @@
 import { AI } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { readHookSessions, updateSessionLabel } from "../lib/hook-state";
-import { listAllSessions, encodeProjectPath } from "../lib/session-parser";
+import { listAllSessions } from "../lib/session-parser";
 import { Session, HookSession, SessionMetadata } from "../types";
 
 /**
@@ -16,15 +16,6 @@ function mergeSessions(
   const jsonlById = new Map<string, SessionMetadata>();
   for (const s of jsonlSessions) {
     jsonlById.set(s.id, s);
-  }
-
-  // Build lookup by project encoded path for fuzzy matching
-  const jsonlByProject = new Map<string, SessionMetadata[]>();
-  for (const s of jsonlSessions) {
-    const encoded = encodeProjectPath(s.projectPath);
-    const list = jsonlByProject.get(encoded) || [];
-    list.push(s);
-    jsonlByProject.set(encoded, list);
   }
 
   return hookSessions.map((hook) => {
@@ -67,6 +58,7 @@ async function generateLabel(prompt: string): Promise<string> {
 
 export function useSessions(pollInterval: number = 3000) {
   const pendingLabels = useRef(new Set<string>());
+  const labelsGeneratedRef = useRef(new Set<string>());
 
   const { data, isLoading, revalidate } = useCachedPromise(async () => {
     const hookSessions = readHookSessions();
@@ -86,7 +78,11 @@ export function useSessions(pollInterval: number = 3000) {
   useEffect(() => {
     if (!data?.all) return;
     const sessions = data.all.filter(
-      (s) => s.first_prompt && !s.label && !pendingLabels.current.has(s.session_id),
+      (s) =>
+        s.first_prompt &&
+        !s.label &&
+        !pendingLabels.current.has(s.session_id) &&
+        !labelsGeneratedRef.current.has(s.session_id),
     );
     if (sessions.length === 0) return;
 
@@ -98,7 +94,7 @@ export function useSessions(pollInterval: number = 3000) {
         .then((label) => {
           if (label) {
             updateSessionLabel(session.session_id, label);
-            revalidate();
+            labelsGeneratedRef.current.add(session.session_id);
           }
         })
         .catch(() => {})
@@ -106,17 +102,13 @@ export function useSessions(pollInterval: number = 3000) {
           pendingLabels.current.delete(session.session_id);
         });
     }
-  }, [data?.all, revalidate]);
-
-  const stableRevalidate = useCallback(() => {
-    revalidate();
-  }, [revalidate]);
+  }, [data?.all]);
 
   // Poll for updates
   useEffect(() => {
-    const timer = setInterval(stableRevalidate, pollInterval);
+    const timer = setInterval(revalidate, pollInterval);
     return () => clearInterval(timer);
-  }, [stableRevalidate, pollInterval]);
+  }, [revalidate, pollInterval]);
 
   return {
     sessions: data?.all ?? [],
@@ -125,6 +117,6 @@ export function useSessions(pollInterval: number = 3000) {
     idleSessions: data?.idle ?? [],
     endedSessions: data?.ended ?? [],
     isLoading,
-    revalidate: stableRevalidate,
+    revalidate,
   };
 }
