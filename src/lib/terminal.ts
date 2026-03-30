@@ -27,11 +27,14 @@ interface Preferences {
   defaultApp?: string;
 }
 
-/**
- * Focus the terminal/editor where the Claude Code session is running.
- * Uses term_program saved by hook.sh during SessionStart.
- * Falls back to user preference or Terminal.app.
- */
+function shellQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+
+function escapeAppleScript(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 /**
  * Resume a Claude Code session by opening a terminal and running claude --resume.
  */
@@ -46,20 +49,13 @@ export async function resumeSession(
   }
 
   const cmd = `claude --resume "${sessionId}"`;
-  const cdAndCmd = `cd ${cwd.replace(/'/g, "\\'")} && ${cmd}`;
-
+  const cdAndCmd = `cd ${shellQuote(cwd)} && ${cmd}`;
   const env = buildClaudeEnv();
 
-  if (termProgram === "Apple_Terminal") {
+  if (termProgram === "iTerm.app") {
     await execFileAsync("osascript", [
       "-e",
-      `tell application "Terminal" to do script "${cdAndCmd}"`,
-    ], { env });
-    await execFileAsync("open", ["-a", "Terminal"], { env });
-  } else if (termProgram === "iTerm.app") {
-    await execFileAsync("osascript", [
-      "-e",
-      `tell application "iTerm" to create window with default profile command "${cdAndCmd}"`,
+      `tell application "iTerm" to create window with default profile command "${escapeAppleScript(cdAndCmd)}"`,
     ], { env });
   } else if (termProgram === "WarpTerminal") {
     await execFileAsync("osascript", [
@@ -73,15 +69,20 @@ export async function resumeSession(
     // Warp doesn't have great AppleScript support, open and let user paste
     await execFileAsync("open", ["-a", "Warp"], { env });
   } else {
-    // For editors (zed, vscode, cursor) or unknown terminals, open default terminal
+    // Apple_Terminal, editors, or unknown terminals: open in Terminal.app
     await execFileAsync("osascript", [
       "-e",
-      `tell application "Terminal" to do script "${cdAndCmd}"`,
+      `tell application "Terminal" to do script "${escapeAppleScript(cdAndCmd)}"`,
     ], { env });
     await execFileAsync("open", ["-a", "Terminal"], { env });
   }
 }
 
+/**
+ * Focus the terminal/editor where the Claude Code session is running.
+ * Uses term_program saved by hook.sh during SessionStart.
+ * Falls back to user preference or Terminal.app.
+ */
 export async function focusSession(session: Session): Promise<void> {
   const prefs = getPreferenceValues<Preferences>();
   const termProgram =
@@ -90,14 +91,15 @@ export async function focusSession(session: Session): Promise<void> {
 
   if (!cwd) return;
 
+  const env = buildClaudeEnv();
+
   // 1. Editor: CLI command focuses the project window directly
   const editorCmd = EDITOR_COMMANDS[termProgram];
   if (editorCmd) {
     try {
-      await execFileAsync(editorCmd, [cwd], { env: buildClaudeEnv() });
+      await execFileAsync(editorCmd, [cwd], { env });
     } catch {
-      // Editor CLI not found, try open -a
-      await execFileAsync("open", ["-a", termProgram]).catch(() => {});
+      await execFileAsync("open", ["-a", termProgram], { env }).catch(() => {});
     }
     return;
   }
@@ -105,9 +107,8 @@ export async function focusSession(session: Session): Promise<void> {
   // 2. Terminal: activate the app
   const appName = TERMINAL_APPS[termProgram] || termProgram;
   try {
-    await execFileAsync("open", ["-a", appName], { env: buildClaudeEnv() });
+    await execFileAsync("open", ["-a", appName], { env });
   } catch {
-    // Fallback: try using the raw term_program value
-    await execFileAsync("open", ["-a", termProgram], { env: buildClaudeEnv() }).catch(() => {});
+    await execFileAsync("open", ["-a", termProgram], { env }).catch(() => {});
   }
 }
