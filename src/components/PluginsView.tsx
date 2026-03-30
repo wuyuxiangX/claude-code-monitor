@@ -375,10 +375,16 @@ async function handleUpdate(plugin: PluginInfo, revalidate: () => void) {
     title: `Updating ${plugin.name}...`,
   });
   try {
-    await updatePlugin(plugin.key);
+    const output = await updatePlugin(plugin.key);
     revalidate();
-    toast.style = Toast.Style.Success;
-    toast.title = `Updated ${plugin.name}`;
+    if (output.includes("already at the latest version")) {
+      toast.style = Toast.Style.Success;
+      toast.title = `${plugin.name} is already up to date`;
+    } else {
+      toast.style = Toast.Style.Success;
+      toast.title = `Updated ${plugin.name}`;
+      toast.message = "Restart Claude Code to apply changes";
+    }
   } catch (err) {
     toast.style = Toast.Style.Failure;
     toast.title = "Failed to update plugin";

@@ -192,6 +192,34 @@ export async function uninstallPlugin(pluginKey: string): Promise<void> {
   await runClaudePlugin("uninstall", pluginKey);
 }
 
-export async function updatePlugin(pluginKey: string): Promise<void> {
-  await runClaudePlugin("update", pluginKey);
+export async function updatePlugin(pluginKey: string): Promise<string> {
+  // Claude CLI doesn't pull the marketplace repo before checking versions,
+  // so we pull it manually to ensure we compare against the latest remote.
+  const marketplaceId = pluginKey.split("@")[1];
+  if (marketplaceId) {
+    await pullMarketplace(marketplaceId);
+  }
+  const output = await runClaudePlugin("update", pluginKey);
+  return output;
+}
+
+async function pullMarketplace(marketplaceId: string): Promise<void> {
+  const marketplaces =
+    readJsonFile<Record<string, MarketplaceInfo>>(KNOWN_MARKETPLACES_PATH) ?? {};
+  const info = marketplaces[marketplaceId];
+  if (!info?.installLocation) return;
+
+  // Only pull git-based marketplaces (some like claude-plugins-official use GCS)
+  const gitDir = path.join(info.installLocation, ".git");
+  if (!fs.existsSync(gitDir)) return;
+
+  try {
+    await execFileAsync("git", ["pull"], {
+      cwd: info.installLocation,
+      timeout: 15000,
+      env: buildClaudeEnv(),
+    });
+  } catch {
+    // Pull failed (offline, no remote, etc.) — proceed with cached version
+  }
 }
