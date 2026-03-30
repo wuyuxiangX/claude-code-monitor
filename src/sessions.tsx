@@ -20,14 +20,11 @@ import { formatCost } from "./lib/usage-stats";
 import {
   STATE_CONFIG,
   DEFAULT_STATE_CONFIG,
-  APP_LABELS,
   getSessionTitle,
+  getAppLabel,
 } from "./lib/constants";
+import { escapeMarkdown } from "./lib/fs-utils";
 import { Session, SessionDetail as SessionDetailType } from "./types";
-
-function getAppLabel(termProgram: string): string {
-  return APP_LABELS[termProgram] || termProgram;
-}
 
 export default function SessionsCommand() {
   const {
@@ -233,6 +230,7 @@ function SessionDetailView({
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<SessionDetailType | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -241,6 +239,7 @@ function SessionDetailView({
         setDetail(d);
       } catch (e) {
         console.error("Failed to load session detail:", e);
+        setLoadError(true);
       } finally {
         setIsLoading(false);
       }
@@ -249,7 +248,7 @@ function SessionDetailView({
   }, [sessionId]);
 
   if (!detail && !isLoading) {
-    return <Detail markdown="# Session Not Found" />;
+    return <Detail markdown={loadError ? "# Failed to Load Session\n\nCould not read session data." : "# Session Not Found"} />;
   }
 
   const title =
@@ -263,9 +262,9 @@ function SessionDetailView({
   const duration = formatDuration(startedAt, endedAt);
   const gitBranch = parentSession.gitBranch || detail?.gitBranch;
   const firstPrompt = parentSession.first_prompt || detail?.firstMessage || "";
-  let markdown = `# ${title}\n\n`;
-  if (detail?.summary) markdown += `> ${detail.summary}\n\n`;
-  if (firstPrompt) markdown += `---\n\n## First Prompt\n\n${firstPrompt}\n`;
+  let markdown = `# ${escapeMarkdown(title)}\n\n`;
+  if (detail?.summary) markdown += `> ${escapeMarkdown(detail.summary)}\n\n`;
+  if (firstPrompt) markdown += `---\n\n## First Prompt\n\n${escapeMarkdown(firstPrompt)}\n`;
 
   return (
     <Detail

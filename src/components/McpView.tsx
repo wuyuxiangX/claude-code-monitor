@@ -202,15 +202,7 @@ function McpDetailView({
           <Detail.Metadata.TagList title="Status">
             <Detail.Metadata.TagList.Item
               text={server.status || "Unknown"}
-              color={
-                server.status === "Connected"
-                  ? Color.Green
-                  : server.status === "Needs Auth"
-                    ? Color.Orange
-                    : server.status === "Unreachable"
-                      ? Color.Yellow
-                      : Color.SecondaryText
-              }
+              color={STATUS_COLOR[server.status] ?? Color.SecondaryText}
             />
           </Detail.Metadata.TagList>
           <Detail.Metadata.Label title="Category" text={server.category} />

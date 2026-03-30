@@ -213,6 +213,9 @@ export async function loadAllSkills(): Promise<SkillInfo[]> {
 }
 
 export function uninstallSkill(dirName: string): void {
+  if (!dirName || dirName === "." || dirName === "..") {
+    throw new Error("Invalid skill path");
+  }
   const fullPath = path.join(SKILLS_DIR, dirName);
   // Prevent path traversal
   if (!fullPath.startsWith(SKILLS_DIR + path.sep) && fullPath !== SKILLS_DIR) {

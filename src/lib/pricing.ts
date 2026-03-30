@@ -65,8 +65,11 @@ export function formatTokens(tokens: number): string {
 /** Normalize model name for display (e.g. "claude-opus-4-6" → "Opus 4.6") */
 export function normalizeModelName(model: string): string {
   const lower = model.toLowerCase();
-  if (lower.includes("opus")) return "Opus";
-  if (lower.includes("sonnet")) return "Sonnet";
-  if (lower.includes("haiku")) return "Haiku";
+  // Extract version like "4-6" → "4.6", "4-5" → "4.5"
+  const versionMatch = lower.match(/(\d+)[-.](\d+)/);
+  const version = versionMatch ? ` ${versionMatch[1]}.${versionMatch[2]}` : "";
+  if (lower.includes("opus")) return `Opus${version}`;
+  if (lower.includes("sonnet")) return `Sonnet${version}`;
+  if (lower.includes("haiku")) return `Haiku${version}`;
   return model;
 }

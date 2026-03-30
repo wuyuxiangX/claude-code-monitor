@@ -13,6 +13,13 @@ export function readJsonFile<T>(filePath: string): T | null {
 
 const HOME = os.homedir();
 
+export const CLAUDE_DIR = path.join(HOME, ".claude");
+export const CLAUDE_MONITOR_DIR = path.join(CLAUDE_DIR, "claude-code-monitor");
+
+export function escapeMarkdown(text: string): string {
+  return text.replace(/([#*_`|~\[\]\\<>])/g, "\\$1");
+}
+
 export function buildClaudeEnv(
   extraEnv?: Record<string, string>,
 ): NodeJS.ProcessEnv {

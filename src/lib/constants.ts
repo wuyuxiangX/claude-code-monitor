@@ -39,6 +39,10 @@ export const APP_LABELS: Record<string, string> = {
   tmux: "tmux",
 };
 
+export function getAppLabel(termProgram: string): string {
+  return APP_LABELS[termProgram] || termProgram;
+}
+
 // 会话标题获取辅助函数
 export function getSessionTitle(session: {
   project_name?: string;

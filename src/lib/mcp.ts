@@ -30,7 +30,7 @@ function getShellProxy(): Record<string, string> {
       for (const m of content.matchAll(
         /(?:export\s+)?((https?_proxy|all_proxy|no_proxy))=(\S+)/gi,
       )) {
-        vars[m[1]] = m[3];
+        vars[m[1]] = m[3].replace(/^["']|["']$/g, "");
       }
       if (Object.keys(vars).length > 0) return vars;
     }

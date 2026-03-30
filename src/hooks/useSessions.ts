@@ -90,18 +90,23 @@ export function useSessions(pollInterval: number = 3000) {
     const batch = sessions.slice(0, 3);
     for (const session of batch) {
       pendingLabels.current.add(session.session_id);
-      generateLabel(session.first_prompt!)
-        .then((label) => {
+    }
+    (async () => {
+      for (const session of batch) {
+        try {
+          if (labelsGeneratedRef.current.has(session.session_id)) continue;
+          const label = await generateLabel(session.first_prompt!);
           if (label) {
             updateSessionLabel(session.session_id, label);
             labelsGeneratedRef.current.add(session.session_id);
           }
-        })
-        .catch(() => {})
-        .finally(() => {
+        } catch {
+          // Label generation failed, will retry on next cycle
+        } finally {
           pendingLabels.current.delete(session.session_id);
-        });
-    }
+        }
+      }
+    })();
   }, [data?.all]);
 
   // Poll for updates

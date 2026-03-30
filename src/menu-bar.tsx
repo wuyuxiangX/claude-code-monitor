@@ -12,8 +12,8 @@ import { formatCost } from "./lib/usage-stats";
 import {
   STATE_CONFIG,
   DEFAULT_STATE_CONFIG,
-  APP_LABELS,
   getSessionTitle,
+  getAppLabel,
 } from "./lib/constants";
 import { Session } from "./types";
 
@@ -116,7 +116,7 @@ function SessionMenuItem({ session }: { session: Session }) {
       ? ` | ${formatCost(session.cost)}`
       : "";
   const appLabel = session.term_program
-    ? APP_LABELS[session.term_program] || session.term_program
+    ? getAppLabel(session.term_program)
     : "";
   const appStr = appLabel ? `${appLabel} | ` : "";
 

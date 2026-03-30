@@ -11,13 +11,15 @@ import { formatTokens } from "./lib/pricing";
 import { UsageStats, DailyStats } from "./types";
 
 export default function UsageDashboardCommand() {
-  const { data, isLoading, revalidate } = useCachedPromise(() =>
+  const { data, isLoading, revalidate, error } = useCachedPromise(() =>
     getAllStats(7),
   );
 
   const markdown = data
     ? buildDashboardMarkdown(data)
-    : "Loading usage data...";
+    : error
+      ? "# Failed to Load\n\nCould not load usage data. Press Cmd+R to retry."
+      : "Loading usage data...";
 
   return (
     <Detail

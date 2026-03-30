@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   UsageStats,
@@ -11,7 +11,7 @@ import {
 } from "../types";
 import { formatTokens, normalizeModelName } from "./pricing";
 
-const execPromise = promisify(exec);
+const execFilePromise = promisify(execFile);
 
 const CACHE_FILE = path.join(
   os.homedir(),
@@ -44,7 +44,7 @@ interface CacheEntry {
 async function runScanner(afterDate: Date): Promise<void> {
   const scannerPath = path.join(__dirname, "scanner.js");
   await fs.promises.access(scannerPath);
-  await execPromise(`node "${scannerPath}" ${afterDate.getTime()}`, {
+  await execFilePromise("node", [scannerPath, String(afterDate.getTime())], {
     timeout: 30000,
     maxBuffer: 1024 * 1024,
   });
@@ -288,7 +288,7 @@ export function generateModelTable(
 
 export async function isClaudeActive(): Promise<boolean> {
   try {
-    const { stdout } = await execPromise("pgrep -x claude || true");
+    const { stdout } = await execFilePromise("pgrep", ["-x", "claude"]);
     return stdout.trim().length > 0;
   } catch {
     return false;

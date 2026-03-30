@@ -308,17 +308,17 @@ async function parseSessionMetadataFast(
       const text = carry + buf.toString("utf8", 0, bytesRead);
 
       // Sum token fields across all occurrences in this chunk
-      inputTokens += sumAllMatches(text, RE_INPUT_TOKENS);
-      outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS);
-      cacheReadTokens += sumAllMatches(text, RE_CACHE_READ);
-      cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION);
+      inputTokens += sumAllMatches(text, RE_INPUT_TOKENS());
+      outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS());
+      cacheReadTokens += sumAllMatches(text, RE_CACHE_READ());
+      cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION());
 
       // Count turns
-      assistantTurns += countMatches(text, RE_TYPE_ASSISTANT);
-      userTurns += countMatches(text, RE_TYPE_USER);
+      assistantTurns += countMatches(text, RE_TYPE_ASSISTANT());
+      userTurns += countMatches(text, RE_TYPE_USER());
 
       // Extract model (keep last seen)
-      const m = lastMatch(text, RE_MODEL);
+      const m = lastMatch(text, RE_MODEL());
       if (m) model = m;
 
       // Extract gitBranch
@@ -327,8 +327,9 @@ async function parseSessionMetadataFast(
         if (gb) result.gitBranch = gb[1];
       }
 
-      // Keep last 200 chars for boundary handling
-      carry = text.slice(-200);
+      // Keep only the incomplete trailing line for boundary handling
+      const lastNewline = text.lastIndexOf("\n");
+      carry = lastNewline >= 0 ? text.slice(lastNewline + 1) : text;
       pos += bytesRead;
     }
   } catch {
@@ -455,7 +456,7 @@ export async function getSessionDetail(
   for (const projectDir of projectDirs) {
     const sessionFiles = await listSessionFiles(projectDir);
     const matchingFile = sessionFiles.find(
-      (f) => f === `${sessionId}.jsonl` || f.includes(sessionId),
+      (f) => f === `${sessionId}.jsonl` || f.startsWith(sessionId),
     );
 
     if (matchingFile) {

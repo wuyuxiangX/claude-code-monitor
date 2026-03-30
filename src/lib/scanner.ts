@@ -157,14 +157,14 @@ async function main() {
           if (!bytesRead) break;
           const text = carry + buf.toString("utf8", 0, bytesRead);
 
-          inputTokens += sumAllMatches(text, RE_INPUT_TOKENS);
-          outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS);
-          cacheReadTokens += sumAllMatches(text, RE_CACHE_READ);
-          cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION);
-          assistantTurns += countMatches(text, RE_TYPE_ASSISTANT);
-          userTurns += countMatches(text, RE_TYPE_USER);
+          inputTokens += sumAllMatches(text, RE_INPUT_TOKENS());
+          outputTokens += sumAllMatches(text, RE_OUTPUT_TOKENS());
+          cacheReadTokens += sumAllMatches(text, RE_CACHE_READ());
+          cacheCreationTokens += sumAllMatches(text, RE_CACHE_CREATION());
+          assistantTurns += countMatches(text, RE_TYPE_ASSISTANT());
+          userTurns += countMatches(text, RE_TYPE_USER());
 
-          const m = lastMatch(text, RE_MODEL);
+          const m = lastMatch(text, RE_MODEL());
           if (m) model = m;
 
           if (!gitBranch) {
@@ -172,7 +172,8 @@ async function main() {
             if (gb) gitBranch = gb[1];
           }
 
-          carry = text.slice(-200);
+          const lastNewline = text.lastIndexOf("\n");
+          carry = lastNewline >= 0 ? text.slice(lastNewline + 1) : text;
           pos += bytesRead;
         }
       } finally {

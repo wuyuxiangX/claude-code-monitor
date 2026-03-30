@@ -19,7 +19,8 @@ export interface HookSession {
   worktree_name?: string;
 }
 
-export interface HookStateRaw extends HookSession {
+export interface HookStateRaw extends Partial<HookSession> {
+  session_id: string;
   _internal?: boolean;
 }
 

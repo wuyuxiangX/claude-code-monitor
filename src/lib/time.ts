@@ -12,6 +12,7 @@ export function formatRelativeTime(timestamp: number): string {
 
 export function formatDuration(startMs: number, endMs: number): string {
   const diff = endMs - startMs;
+  if (diff < 0) return "0m";
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "<1m";
   if (minutes < 60) return `${minutes}m`;
