@@ -12,6 +12,7 @@ import { formatCost } from "./lib/usage-stats";
 import {
   STATE_CONFIG,
   DEFAULT_STATE_CONFIG,
+  APP_LABELS,
   getSessionTitle,
 } from "./lib/constants";
 import { Session } from "./types";
@@ -114,13 +115,17 @@ function SessionMenuItem({ session }: { session: Session }) {
     session.cost != null && session.cost > 0
       ? ` | ${formatCost(session.cost)}`
       : "";
+  const appLabel = session.term_program
+    ? APP_LABELS[session.term_program] || session.term_program
+    : "";
+  const appStr = appLabel ? `${appLabel} | ` : "";
 
   const title = getSessionTitle(session);
 
   return (
     <MenuBarExtra.Item
       title={title}
-      subtitle={`${duration} | ${lastUpdate}${costStr}`}
+      subtitle={`${appStr}${duration} | ${lastUpdate}${costStr}`}
       icon={stateIcon}
       onAction={() => focusSession(session).catch(console.error)}
     />
