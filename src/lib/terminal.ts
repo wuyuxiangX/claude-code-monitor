@@ -53,27 +53,39 @@ export async function resumeSession(
   const env = buildClaudeEnv();
 
   if (termProgram === "iTerm.app") {
-    await execFileAsync("osascript", [
-      "-e",
-      `tell application "iTerm" to create window with default profile command "${escapeAppleScript(cdAndCmd)}"`,
-    ], { env });
+    await execFileAsync(
+      "osascript",
+      [
+        "-e",
+        `tell application "iTerm" to create window with default profile command "${escapeAppleScript(cdAndCmd)}"`,
+      ],
+      { env },
+    );
   } else if (termProgram === "WarpTerminal") {
-    await execFileAsync("osascript", [
-      "-e",
-      'tell application "Warp" to activate',
-      "-e",
-      "delay 0.3",
-      "-e",
-      'tell application "System Events" to keystroke "t" using command down',
-    ], { env });
+    await execFileAsync(
+      "osascript",
+      [
+        "-e",
+        'tell application "Warp" to activate',
+        "-e",
+        "delay 0.3",
+        "-e",
+        'tell application "System Events" to keystroke "t" using command down',
+      ],
+      { env },
+    );
     // Warp doesn't have great AppleScript support, open and let user paste
     await execFileAsync("open", ["-a", "Warp"], { env });
   } else {
     // Apple_Terminal, editors, or unknown terminals: open in Terminal.app
-    await execFileAsync("osascript", [
-      "-e",
-      `tell application "Terminal" to do script "${escapeAppleScript(cdAndCmd)}"`,
-    ], { env });
+    await execFileAsync(
+      "osascript",
+      [
+        "-e",
+        `tell application "Terminal" to do script "${escapeAppleScript(cdAndCmd)}"`,
+      ],
+      { env },
+    );
     await execFileAsync("open", ["-a", "Terminal"], { env });
   }
 }

@@ -17,7 +17,7 @@ export const CLAUDE_DIR = path.join(HOME, ".claude");
 export const CLAUDE_MONITOR_DIR = path.join(CLAUDE_DIR, "claude-code-monitor");
 
 export function escapeMarkdown(text: string): string {
-  return text.replace(/([#*_`|~\[\]\\<>])/g, "\\$1");
+  return text.replace(/([#*_`|~[\]\\<>])/g, "\\$1");
 }
 
 export function buildClaudeEnv(

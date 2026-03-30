@@ -205,7 +205,8 @@ export async function updatePlugin(pluginKey: string): Promise<string> {
 
 async function pullMarketplace(marketplaceId: string): Promise<void> {
   const marketplaces =
-    readJsonFile<Record<string, MarketplaceInfo>>(KNOWN_MARKETPLACES_PATH) ?? {};
+    readJsonFile<Record<string, MarketplaceInfo>>(KNOWN_MARKETPLACES_PATH) ??
+    {};
   const info = marketplaces[marketplaceId];
   if (!info?.installLocation) return;
 

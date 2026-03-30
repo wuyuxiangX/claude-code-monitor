@@ -248,7 +248,15 @@ function SessionDetailView({
   }, [sessionId]);
 
   if (!detail && !isLoading) {
-    return <Detail markdown={loadError ? "# Failed to Load Session\n\nCould not read session data." : "# Session Not Found"} />;
+    return (
+      <Detail
+        markdown={
+          loadError
+            ? "# Failed to Load Session\n\nCould not read session data."
+            : "# Session Not Found"
+        }
+      />
+    );
   }
 
   const title =
@@ -264,7 +272,8 @@ function SessionDetailView({
   const firstPrompt = parentSession.first_prompt || detail?.firstMessage || "";
   let markdown = `# ${escapeMarkdown(title)}\n\n`;
   if (detail?.summary) markdown += `> ${escapeMarkdown(detail.summary)}\n\n`;
-  if (firstPrompt) markdown += `---\n\n## First Prompt\n\n${escapeMarkdown(firstPrompt)}\n`;
+  if (firstPrompt)
+    markdown += `---\n\n## First Prompt\n\n${escapeMarkdown(firstPrompt)}\n`;
 
   return (
     <Detail
