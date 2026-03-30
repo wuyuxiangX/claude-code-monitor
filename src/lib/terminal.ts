@@ -2,6 +2,7 @@ import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Session } from "../types";
+import { buildClaudeEnv } from "./fs-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,17 +48,19 @@ export async function resumeSession(
   const cmd = `claude --resume "${sessionId}"`;
   const cdAndCmd = `cd ${cwd.replace(/'/g, "\\'")} && ${cmd}`;
 
+  const env = buildClaudeEnv();
+
   if (termProgram === "Apple_Terminal") {
     await execFileAsync("osascript", [
       "-e",
       `tell application "Terminal" to do script "${cdAndCmd}"`,
-    ]);
-    await execFileAsync("open", ["-a", "Terminal"]);
+    ], { env });
+    await execFileAsync("open", ["-a", "Terminal"], { env });
   } else if (termProgram === "iTerm.app") {
     await execFileAsync("osascript", [
       "-e",
       `tell application "iTerm" to create window with default profile command "${cdAndCmd}"`,
-    ]);
+    ], { env });
   } else if (termProgram === "WarpTerminal") {
     await execFileAsync("osascript", [
       "-e",
@@ -66,16 +69,16 @@ export async function resumeSession(
       "delay 0.3",
       "-e",
       'tell application "System Events" to keystroke "t" using command down',
-    ]);
+    ], { env });
     // Warp doesn't have great AppleScript support, open and let user paste
-    await execFileAsync("open", ["-a", "Warp"]);
+    await execFileAsync("open", ["-a", "Warp"], { env });
   } else {
     // For editors (zed, vscode, cursor) or unknown terminals, open default terminal
     await execFileAsync("osascript", [
       "-e",
       `tell application "Terminal" to do script "${cdAndCmd}"`,
-    ]);
-    await execFileAsync("open", ["-a", "Terminal"]);
+    ], { env });
+    await execFileAsync("open", ["-a", "Terminal"], { env });
   }
 }
 
@@ -91,7 +94,7 @@ export async function focusSession(session: Session): Promise<void> {
   const editorCmd = EDITOR_COMMANDS[termProgram];
   if (editorCmd) {
     try {
-      await execFileAsync(editorCmd, [cwd]);
+      await execFileAsync(editorCmd, [cwd], { env: buildClaudeEnv() });
     } catch {
       // Editor CLI not found, try open -a
       await execFileAsync("open", ["-a", termProgram]).catch(() => {});
@@ -102,9 +105,9 @@ export async function focusSession(session: Session): Promise<void> {
   // 2. Terminal: activate the app
   const appName = TERMINAL_APPS[termProgram] || termProgram;
   try {
-    await execFileAsync("open", ["-a", appName]);
+    await execFileAsync("open", ["-a", appName], { env: buildClaudeEnv() });
   } catch {
     // Fallback: try using the raw term_program value
-    await execFileAsync("open", ["-a", termProgram]).catch(() => {});
+    await execFileAsync("open", ["-a", termProgram], { env: buildClaudeEnv() }).catch(() => {});
   }
 }
