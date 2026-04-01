@@ -50,7 +50,7 @@ function mergeSessions(
 
 async function generateLabel(prompt: string): Promise<string> {
   const result = await AI.ask(
-    `用不超过10个字概括这个请求的核心目的，只输出概括不要任何其他内容：${prompt.slice(0, 200)}`,
+    `Summarize this request in 5 words or less, output only the summary: ${prompt.slice(0, 200)}`,
     { model: AI.Model["Anthropic_Claude_4.5_Haiku"], creativity: "none" },
   );
   return result.trim().slice(0, 30);
