@@ -9,7 +9,7 @@
 
 type ExtensionPreferences = {
   /** Default Application - Fallback app to focus when session's launch app is unknown */
-  "defaultApp": "Apple_Terminal" | "iTerm.app" | "WarpTerminal" | "ghostty" | "vscode" | "cursor" | "zed" | "windsurf"
+  "defaultApp": "Apple_Terminal" | "iTerm.app" | "WarpTerminal" | "ghostty" | "vscode" | "cursor" | "zed" | "windsurf" | "jetbrains-idea" | "jetbrains-webstorm" | "jetbrains-pycharm"
 }
 
 /** Preferences accessible in all the extension's commands */

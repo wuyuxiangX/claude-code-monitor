@@ -19,16 +19,16 @@ Track active sessions, monitor usage costs, and quickly switch between Claude Co
 
 **Supported Editors & Terminals:**
 
-| Editors | Terminals |
-|---------|-----------|
-| VS Code | Terminal.app |
-| Cursor | iTerm2 |
-| Zed | Warp |
-| Windsurf | Ghostty |
-| | kitty |
-| | tmux |
+| Editors | JetBrains IDEs | Terminals |
+|---------|---------------|-----------|
+| VS Code | IntelliJ IDEA | Terminal.app |
+| Cursor | WebStorm | iTerm2 |
+| Zed | PyCharm | Warp |
+| Windsurf | GoLand | Ghostty |
+| | CLion, PhpStorm, etc. | kitty |
+| | | tmux |
 
-Focus action opens the project directly in the editor's CLI (`code`, `zed`, `cursor`, `windsurf`). For terminals, it activates the app window. Resume opens a new terminal tab with `claude --resume`.
+Focus action opens the project directly in the editor's CLI. JetBrains IDEs are detected via `TERMINAL_EMULATOR` and focused using the app bundle launcher. Resume copies `claude --resume` to clipboard and opens your chosen terminal at the project directory.
 
 ### Menu Bar Status
 
