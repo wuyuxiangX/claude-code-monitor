@@ -3,7 +3,6 @@ import { promisify } from "node:util";
 import os from "node:os";
 import { Cache } from "@raycast/api";
 import type { PlanUsageData, PlanUsageResponse } from "../types";
-import { getShellProxy, buildClaudeEnv } from "./fs-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -49,24 +48,20 @@ export async function getPlanUsage(): Promise<PlanUsageData | null> {
   if (!token) return null;
 
   try {
-    const proxyEnv = getShellProxy();
-    const env = buildClaudeEnv(proxyEnv);
+    const response = await fetch("https://api.anthropic.com/api/oauth/usage", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20",
+      },
+      signal: AbortSignal.timeout(15000),
+    });
 
-    const { stdout } = await execFileAsync(
-      "curl",
-      [
-        "-s",
-        "-f",
-        "-H",
-        `Authorization: Bearer ${token}`,
-        "-H",
-        "anthropic-beta: oauth-2025-04-20",
-        "https://api.anthropic.com/api/oauth/usage",
-      ],
-      { env, timeout: 15000 },
-    );
+    if (!response.ok) {
+      console.warn(`Plan usage fetch failed: ${response.status}`);
+      return null;
+    }
 
-    const raw: PlanUsageResponse = JSON.parse(stdout);
+    const raw: PlanUsageResponse = await response.json();
     const data: PlanUsageData = {
       fiveHour: raw.five_hour,
       sevenDay: raw.seven_day,

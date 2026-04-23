@@ -24,22 +24,23 @@ export function getShellProxy(): Record<string, string> {
   // Raycast (GUI app) doesn't source ~/.zshrc, so proxy env vars are missing.
   // Read them directly from shell config files.
   if (process.env.http_proxy || process.env.HTTP_PROXY) return {};
-  try {
-    const rcFiles = [".zshrc", ".bashrc", ".zprofile", ".bash_profile"];
-    for (const file of rcFiles) {
+  // Order matches typical shell load order — later files override earlier ones
+  // so a user's interactive-shell rc wins over login-shell profile.
+  const rcFiles = [".bash_profile", ".zprofile", ".bashrc", ".zshrc"];
+  const vars: Record<string, string> = {};
+  for (const file of rcFiles) {
+    try {
       const content = readFileSync(path.join(HOME, file), "utf-8");
-      const vars: Record<string, string> = {};
       for (const m of content.matchAll(
         /(?:export\s+)?((https?_proxy|all_proxy|no_proxy))=(\S+)/gi,
       )) {
         vars[m[1]] = m[3].replace(/^["']|["']$/g, "");
       }
-      if (Object.keys(vars).length > 0) return vars;
+    } catch {
+      /* file missing — skip */
     }
-  } catch {
-    /* ignore */
   }
-  return {};
+  return vars;
 }
 
 export function buildClaudeEnv(

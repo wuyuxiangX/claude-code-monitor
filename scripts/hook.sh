@@ -174,19 +174,24 @@ import json, os, subprocess, time
 state_file = os.path.expanduser('~/.claude/claude-code-monitor/sessions.json')
 lock_dir = os.path.expanduser('~/.claude/claude-code-monitor/.lock')
 
-with open(state_file) as f:
-    data = json.load(f)
+# Generate labels WITHOUT holding the lock — claude -p can take many seconds
+# and blocking all other hooks for that long would starve live session updates.
+# We re-read state under the lock below before merging, so any hook events
+# that fire during label generation are preserved.
+try:
+    with open(state_file) as f:
+        snapshot = json.load(f)
+except Exception:
+    raise SystemExit(0)
 
-changed = False
-for sid, s in data.get('sessions', {}).items():
+labels = {}
+for sid, s in snapshot.get('sessions', {}).items():
     if not s.get('label_pending'):
         continue
     prompt = s.get('first_prompt', '')
     if not prompt:
-        s.pop('label_pending', None)
-        changed = True
+        labels[sid] = None  # clear pending flag only
         continue
-
     try:
         result = subprocess.run(
             ['claude', '-p', '--model', 'haiku',
@@ -194,35 +199,51 @@ for sid, s in data.get('sessions', {}).items():
             capture_output=True, text=True, timeout=30
         )
         label = result.stdout.strip()
-        if label:
-            s['label'] = label[:30]
-    except:
-        pass
+        labels[sid] = label[:30] if label else None
+    except Exception:
+        labels[sid] = None
 
-    s.pop('label_pending', None)
-    changed = True
+if not labels:
+    raise SystemExit(0)
 
-if changed:
-    for i in range(50):
-        try:
-            os.mkdir(lock_dir)
-            break
-        except FileExistsError:
-            time.sleep(0.02)
-    else:
-        try: os.rmdir(lock_dir)
-        except: pass
-        try: os.mkdir(lock_dir)
-        except: pass
-
+# Acquire lock, then re-read state and merge labels into the latest snapshot.
+for i in range(50):
     try:
+        os.mkdir(lock_dir)
+        break
+    except FileExistsError:
+        time.sleep(0.02)
+else:
+    try: os.rmdir(lock_dir)
+    except: pass
+    try: os.mkdir(lock_dir)
+    except: pass
+
+try:
+    try:
+        with open(state_file) as f:
+            data = json.load(f)
+    except Exception:
+        raise SystemExit(0)
+
+    changed = False
+    for sid, label in labels.items():
+        session = data.get('sessions', {}).get(sid)
+        if not session:
+            continue
+        if label:
+            session['label'] = label
+        session.pop('label_pending', None)
+        changed = True
+
+    if changed:
         tmp = state_file + '.tmp.' + str(os.getpid())
         with open(tmp, 'w') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         os.rename(tmp, state_file)
-    finally:
-        try: os.rmdir(lock_dir)
-        except: pass
+finally:
+    try: os.rmdir(lock_dir)
+    except: pass
 LABELEOF
   ) &
 fi
