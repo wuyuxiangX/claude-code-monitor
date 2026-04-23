@@ -1,10 +1,53 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import os from "node:os";
 import { Cache } from "@raycast/api";
 import type { PlanUsageData, PlanUsageResponse } from "../types";
+import { getShellProxy, buildClaudeEnv } from "./fs-utils";
 
 const execFileAsync = promisify(execFile);
+
+// Use curl with stdin-piped config so the bearer token is never passed as an
+// argv value (would be visible via `ps aux`). Node fetch would be simpler but
+// doesn't honor shell proxy env vars, which users in proxy-only networks need
+// to reach api.anthropic.com.
+function curlOauthUsage(token: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const env = buildClaudeEnv(getShellProxy());
+    const proc = spawn("curl", ["--config", "-"], { env });
+
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error("timeout"));
+    }, 15000);
+
+    proc.stdout.on("data", (d) => (stdout += d.toString()));
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`curl exit ${code}: ${stderr.trim()}`));
+    });
+
+    const config =
+      [
+        `header = "Authorization: Bearer ${token}"`,
+        `header = "anthropic-beta: oauth-2025-04-20"`,
+        `url = "https://api.anthropic.com/api/oauth/usage"`,
+        `silent`,
+        `fail`,
+        `show-error`,
+        `max-time = 15`,
+      ].join("\n") + "\n";
+    proc.stdin.end(config);
+  });
+}
 
 const cache = new Cache();
 const CACHE_KEY = "plan-usage";
@@ -48,20 +91,8 @@ export async function getPlanUsage(): Promise<PlanUsageData | null> {
   if (!token) return null;
 
   try {
-    const response = await fetch("https://api.anthropic.com/api/oauth/usage", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "anthropic-beta": "oauth-2025-04-20",
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!response.ok) {
-      console.warn(`Plan usage fetch failed: ${response.status}`);
-      return null;
-    }
-
-    const raw: PlanUsageResponse = await response.json();
+    const stdout = await curlOauthUsage(token);
+    const raw: PlanUsageResponse = JSON.parse(stdout);
     const data: PlanUsageData = {
       fiveHour: raw.five_hour,
       sevenDay: raw.seven_day,
@@ -71,7 +102,11 @@ export async function getPlanUsage(): Promise<PlanUsageData | null> {
 
     cache.set(CACHE_KEY, JSON.stringify(data));
     return data;
-  } catch {
+  } catch (err) {
+    console.warn(
+      "Plan usage fetch failed:",
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }
