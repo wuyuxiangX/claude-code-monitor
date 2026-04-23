@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "claude-code-monitor",
   "title": "Claude Code Monitor",
-  "description": "Real-time monitoring for Claude Code sessions with status tracking, usage statistics, and quick actions",
+  "description": "Live Claude Code session dashboard with plan quota tracking, plus plugins, skills, and MCP server management",
   "icon": "icon.png",
   "author": "wuyuxiangX",
   "categories": ["Developer Tools", "Productivity"],
