@@ -41,11 +41,16 @@ const JETBRAINS_BUNDLE_MAP: Record<string, string> = {
   "com.google.android.studio": "jetbrains-studio",
 };
 
-// Resolved ID → bundle ID for `open -b` fallback (derived from JETBRAINS_BUNDLE_MAP)
-export const JETBRAINS_FALLBACK_BUNDLES: Record<string, string> =
-  Object.fromEntries(
-    Object.entries(JETBRAINS_BUNDLE_MAP).map(([bundle, id]) => [id, bundle]),
-  );
+// Resolved ID → bundle ID for `open -b` fallback (derived from JETBRAINS_BUNDLE_MAP).
+// Keep the first mapping per id so Ultimate/Professional bundles win over CE —
+// falling back to a CE bundle that isn't installed would silently no-op.
+export const JETBRAINS_FALLBACK_BUNDLES: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const [bundle, id] of Object.entries(JETBRAINS_BUNDLE_MAP)) {
+    if (!(id in out)) out[id] = bundle;
+  }
+  return out;
+})();
 
 // App display names
 export const APP_LABELS: Record<string, string> = {
