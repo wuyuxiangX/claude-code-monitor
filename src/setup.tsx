@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const HOOK_SOURCE = path.join(__dirname, "..", "scripts", "hook.sh");
 const STATE_DIR = path.join(os.homedir(), ".claude", "claude-code-monitor");
+const HOOK_SOURCE = path.join(__dirname, "..", "scripts", "hook.sh");
 const HOOK_DEST = path.join(STATE_DIR, "hook.sh");
+const GUARDIAN_SOURCE = path.join(__dirname, "..", "scripts", "hook-guardian.sh");
+const GUARDIAN_DEST = path.join(STATE_DIR, "hook-guardian.sh");
 const SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
 
 const HOOKS_CONFIG = {
@@ -13,7 +15,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -21,7 +23,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -29,7 +31,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -37,7 +39,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -45,7 +47,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -53,7 +55,7 @@ const HOOKS_CONFIG = {
     {
       matcher: "",
       hooks: [
-        { type: "command", command: "~/.claude/claude-code-monitor/hook.sh" },
+        { type: "command", command: "~/.claude/claude-code-monitor/hook-guardian.sh" },
       ],
     },
   ],
@@ -86,6 +88,16 @@ export default async function SetupCommand() {
 
     await fs.promises.chmod(HOOK_DEST, 0o755);
 
+    // 2b. Also deploy hook-guardian.sh (self-healing wrapper)
+    let guardianSource = GUARDIAN_SOURCE;
+    if (!fs.existsSync(guardianSource)) {
+      guardianSource = "";
+    }
+    if (guardianSource) {
+      await fs.promises.copyFile(guardianSource, GUARDIAN_DEST);
+    }
+    await fs.promises.chmod(GUARDIAN_DEST, 0o755);
+
     // 3. Merge hooks into settings.json
     let settings: Record<string, unknown> = {};
     try {
@@ -98,12 +110,15 @@ export default async function SetupCommand() {
     const existingHooks = (settings.hooks || {}) as Record<string, unknown[]>;
     const mergedHooks = { ...existingHooks };
 
-    // Merge our hooks without overwriting existing ones
+    // Merge our hooks without overwriting existing ones.
+    // Always check and restore hooks for each event — Claude Code may strip
+    // unknown keys when it rewrites settings.json, so we re-inject on every run.
     for (const [event, config] of Object.entries(HOOKS_CONFIG)) {
       const existing = mergedHooks[event] as
         | Array<{ matcher: string; hooks: unknown[] }>
         | undefined;
-      if (!existing) {
+      if (!existing || existing.length === 0) {
+        // Event missing or hooks array stripped entirely — restore
         mergedHooks[event] = config;
       } else {
         // Check if our hook is already registered
